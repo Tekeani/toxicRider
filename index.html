@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Toxic Rider</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="game-container">
+        <div id="player-stats">
+            <div class="stat-bar">
+                <label>HP</label>
+                <div class="bar-container">
+                    <div id="hp-bar" class="bar hp-bar"></div>
+                </div>
+            </div>
+            <div class="stat-bar">
+                <label>TP</label>
+                <div class="bar-container">
+                    <div id="tp-bar" class="bar tp-bar"></div>
+                </div>
+            </div>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/utils/constants.js"></script>
+    <script src="js/utils/SpriteSheet.js"></script>
+    <script src="js/utils/Animation.js"></script>
+    <script src="js/utils/TileMap.js"></script>
+    <script src="js/entities/Player.js"></script>
+    <script src="js/entities/NPC.js"></script>
+    <script src="js/entities/Enemy.js"></script>
+    <script src="js/phases/Phase0_Cinematic.js"></script>
+    <script src="js/phases/Phase1_Roguelike.js"></script>
+    <script src="js/game.js"></script>
+</body>
+</html>
+
