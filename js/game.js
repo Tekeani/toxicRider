@@ -107,10 +107,16 @@ class Game {
     }
 
     nextPhase() {
+        console.log('🔄 Transition de phase - phaseIndex:', this.phaseIndex);
         this.phaseIndex++;
         if (this.phaseIndex < this.phases.length) {
+            console.log('✅ Passage à la phase', this.phaseIndex, '- Type:', this.phases[this.phaseIndex].constructor.name);
             this.currentPhase = this.phases[this.phaseIndex];
-            this.currentPhase.init();
+            this.currentPhase.init().then(() => {
+                console.log('✅ Phase', this.phaseIndex, 'initialisée avec succès');
+            }).catch(err => {
+                console.error('❌ Erreur lors de l\'initialisation de la phase', this.phaseIndex, ':', err);
+            });
         } else {
             console.log('Toutes les phases sont terminées');
             // Fin du jeu ou retour au menu

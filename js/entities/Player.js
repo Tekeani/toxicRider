@@ -64,17 +64,40 @@ class Player {
         this.currentAnimation.play();
     }
 
-    update(keys) {
-        const deltaTime = 1/60;
-        if (this.toxicityCooldown > 0) this.toxicityCooldown--;
+    update(keys, deltaTime = 1/60) {
+        if (!keys) {
+            console.warn('Player.update: keys is undefined or null');
+            return;
+        }
+        
+        if (this.toxicityCooldown > 0) this.toxicityCooldown -= deltaTime * 60; // Convertir en frames pour compatibilité
 
-        // Mouvement
+        // Mouvement basé sur deltaTime (vitesse en pixels par seconde)
+        const speedPerSecond = this.speed * 60; // Convertir de pixels/frame à pixels/seconde (3 * 60 = 180 px/s)
         this.isMoving = false;
         let newX = this.x, newY = this.y;
-        if (keys['ArrowUp'] || keys['z'] || keys['Z']) { newY -= this.speed; this.direction='up'; this.isMoving=true; }
-        if (keys['ArrowDown'] || keys['w'] || keys['W']) { newY += this.speed; this.direction='down'; this.isMoving=true; }
-        if (keys['ArrowRight'] || keys['s'] || keys['S']) { newX += this.speed; this.direction='right'; this.isMoving=true; }
-        if (keys['ArrowLeft'] || keys['q'] || keys['Q']) { newX -= this.speed; this.direction='left'; this.isMoving=true; }
+        
+        // Détection des touches de mouvement
+        if (keys['ArrowUp'] || keys['z'] || keys['Z']) { 
+            newY -= speedPerSecond * deltaTime; 
+            this.direction='up'; 
+            this.isMoving=true; 
+        }
+        if (keys['ArrowDown'] || keys['w'] || keys['W']) { 
+            newY += speedPerSecond * deltaTime; 
+            this.direction='down'; 
+            this.isMoving=true; 
+        }
+        if (keys['ArrowRight'] || keys['s'] || keys['S']) { 
+            newX += speedPerSecond * deltaTime; 
+            this.direction='right'; 
+            this.isMoving=true; 
+        }
+        if (keys['ArrowLeft'] || keys['q'] || keys['Q']) { 
+            newX -= speedPerSecond * deltaTime; 
+            this.direction='left'; 
+            this.isMoving=true; 
+        }
 
         this.x = Math.max(0, Math.min(this.game.canvas.width - this.width, newX));
         this.y = Math.max(0, Math.min(this.game.canvas.height - this.height, newY));

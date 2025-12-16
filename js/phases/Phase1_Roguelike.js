@@ -15,7 +15,6 @@ class Phase1_Roguelike {
         this.tileMap = null;
         this.tilesLoaded = false;
         this.attackFeedbacks = [];
-        this.keys = {};
         this._attackPressed = false;
         this._toxicityPressed = false;
         this.upgradeMenuActive = false;
@@ -25,6 +24,7 @@ class Phase1_Roguelike {
     }
 
     async init() {
+        console.log('🎮 Phase1_Roguelike.init() appelé');
         const width = this.canvas.width;
         const height = this.canvas.height;
 
@@ -35,22 +35,23 @@ class Phase1_Roguelike {
         try {
             await this.tileMap.loadTileset('assets/images/tilesets/mana_forest/big_tree.png');
             this.tilesLoaded = true;
+            console.log('✅ Tileset chargé');
         } catch (e) {
             console.warn('Tileset non chargé, utilisation du rendu de fallback');
             this.tilesLoaded = false;
         }
 
-        // Position initiale du joueur
-        this.player = new Player(width / 2 - 72, height / 2 - 72, this.game);
+        // Position initiale du joueur (même position que dans la cinématique)
+        this.player = new Player(width / 2 - 80, height / 2 - 150, this.game);
+        console.log('✅ Joueur créé à la position:', this.player.x, this.player.y);
 
-        // Spawn immédiat de la première vague
-        this.spawnWave();
+        // Pas de spawn d'ennemis pour le moment
+        // this.spawnWave();
+        console.log('✅ Phase1_Roguelike initialisée complètement');
     }
 
     setupInput() {
         document.addEventListener('keydown', (e) => {
-            this.keys[e.key] = true;
-
             // Attaque à l'épée (E ou Enter)
             if ((e.key === 'e' || e.key === 'E' || e.key === 'Enter') && !this._attackPressed) {
                 this._attackPressed = true;
@@ -85,8 +86,6 @@ class Phase1_Roguelike {
         });
 
         document.addEventListener('keyup', (e) => {
-            this.keys[e.key] = false;
-
             if (e.key === 'e' || e.key === 'E' || e.key === 'Enter') {
                 this._attackPressed = false;
             }
@@ -203,47 +202,55 @@ class Phase1_Roguelike {
     }
 
     update(deltaTime, keys) {
-        if (this.upgradeMenuActive) return;
+        // Log une seule fois pour confirmer que update est appelé
+        if (!this._updateLogged) {
+            console.log('🔄 Phase1_Roguelike.update() appelé - player:', this.player ? 'existe' : 'null');
+            this._updateLogged = true;
+        }
+        
+        // Pas de menu d'amélioration pour le moment
+        // if (this.upgradeMenuActive) return;
 
         // Mise à jour du joueur
         if (this.player) {
-            this.player.update(keys);
+            this.player.update(keys, deltaTime);
             
-            // Vérifier l'attaque
-            if (this.player.isAttacking) {
-                this.playerAttack('strength');
-            }
+            // Pas d'attaque pour le moment
+            // if (this.player.isAttacking) {
+            //     this.playerAttack('strength');
+            // }
+        } else {
+            console.warn('⚠️ Phase1_Roguelike: player is null');
         }
 
-        // Mise à jour des ennemis
-        this.enemies.forEach(enemy => {
-            if (enemy.isAlive) {
-                enemy.update();
-            }
-        });
+        // Pas de mise à jour des ennemis pour le moment
+        // this.enemies.forEach(enemy => {
+        //     if (enemy.isAlive) {
+        //         enemy.update();
+        //     }
+        // });
 
-        // Nettoyer les ennemis morts
-        this.enemies = this.enemies.filter(e => e.isAlive);
+        // Pas de nettoyage des ennemis pour le moment
+        // this.enemies = this.enemies.filter(e => e.isAlive);
 
-        // Vérifier si la vague est terminée
-        if (this.enemies.length === 0 && !this.allWavesComplete && this.currentWave < this.waves.length) {
-            this.upgradeMenuActive = true;
-        }
+        // Pas de vérification de vague pour le moment
+        // if (this.enemies.length === 0 && !this.allWavesComplete && this.currentWave < this.waves.length) {
+        //     this.upgradeMenuActive = true;
+        // }
 
-        // Vérifier si toutes les vagues sont terminées
-        if (this.enemies.length === 0 && this.allWavesComplete) {
-            // Passer à la phase suivante
-            setTimeout(() => {
-                this.game.nextPhase();
-            }, 1000);
-        }
+        // Pas de passage à la phase suivante pour le moment
+        // if (this.enemies.length === 0 && this.allWavesComplete) {
+        //     setTimeout(() => {
+        //         this.game.nextPhase();
+        //     }, 1000);
+        // }
 
-        // Mise à jour des feedbacks d'attaque
-        this.attackFeedbacks = this.attackFeedbacks.filter(feedback => {
-            feedback.timer--;
-            feedback.y -= 1;
-            return feedback.timer > 0;
-        });
+        // Pas de feedbacks d'attaque pour le moment
+        // this.attackFeedbacks = this.attackFeedbacks.filter(feedback => {
+        //     feedback.timer--;
+        //     feedback.y -= 1;
+        //     return feedback.timer > 0;
+        // });
 
         // Vérifier si le joueur est mort
         if (this.player && !this.player.isAlive) {
@@ -256,49 +263,139 @@ class Phase1_Roguelike {
         // Nettoyer le canvas en premier
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         
-        // 1. Fond/tiles
-        if (this.tilesLoaded && this.tileMap) {
-            this.tileMap.render(ctx);
-        } else {
-            ctx.fillStyle = '#000';
-            ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-        }
-
-        // 2. Ennemis
-        this.enemies.forEach(enemy => {
-            if (enemy.isAlive) {
-                enemy.render(ctx);
+        // Désactiver l'anti-aliasing pour un rendu pixel art
+        ctx.imageSmoothingEnabled = false;
+        
+        // Sol en damier avec 2 verts seulement (même décor que la cinématique)
+        const green1 = '#90EE90'; // Vert clair
+        const green2 = '#32CD32'; // Vert moyen
+        const tileSize = 32;
+        
+        // Créer un damier avec 2 verts
+        for (let x = 0; x < this.canvas.width; x += tileSize) {
+            for (let y = 0; y < this.canvas.height; y += tileSize) {
+                const tileX = Math.floor(x / tileSize);
+                const tileY = Math.floor(y / tileSize);
+                // Alternance en damier
+                ctx.fillStyle = (tileX + tileY) % 2 === 0 ? green1 : green2;
+                ctx.fillRect(x, y, tileSize, tileSize);
             }
+        }
+        
+        // ARBRES - Désactiver l'anti-aliasing pour pixel art
+        ctx.imageSmoothingEnabled = false;
+        
+        // Arbres simples : carrés collés (tronc marron + feuillage vert)
+        const drawSimpleTree = (x, y) => {
+            // Tronc marron (rectangle vertical)
+            ctx.fillStyle = '#8B4513';
+            const trunkWidth = 40;
+            const trunkHeight = 80;
+            ctx.fillRect(x - trunkWidth/2, y - trunkHeight, trunkWidth, trunkHeight);
+            
+            // Feuillage vert (carrés collés au-dessus du tronc)
+            ctx.fillStyle = '#006400'; // Vert foncé différent du sol
+            // Carré du bas (le plus large)
+            ctx.fillRect(x - 40, y - trunkHeight - 40, 80, 40);
+            // Carré du milieu
+            ctx.fillRect(x - 30, y - trunkHeight - 80, 60, 40);
+            // Carré du haut (le plus petit)
+            ctx.fillRect(x - 20, y - trunkHeight - 110, 40, 30);
+        };
+        
+        // Positionner les arbres dispersés partout sur l'écran (vue du dessus)
+        const trees = [
+            {x: 150, y: 200},   // Haut gauche
+            {x: 400, y: 150},   // Haut centre
+            {x: 750, y: 180},   // Haut droite
+            {x: 250, y: 500},   // Bas gauche
+            {x: 600, y: 550},   // Bas centre
+            {x: 900, y: 520}    // Bas droite
+        ];
+        
+        // Dessiner les arbres
+        trees.forEach(tree => {
+            drawSimpleTree(tree.x, tree.y);
         });
+        
+        // Rochers en pixel art (vue du dessus)
+        const drawPixelRockTopDown = (x, y, size) => {
+            // Différents gris pour les rochers
+            const grays = ['#696969', '#808080', '#A9A9A9', '#778899'];
+            const grayIndex = Math.floor((x + y) / 50) % grays.length;
+            
+            // Forme de rocher vue de dessus (forme irrégulière)
+            ctx.fillStyle = grays[grayIndex];
+            
+            // Corps principal (forme ovale/carrée arrondie)
+            ctx.beginPath();
+            ctx.ellipse(x, y, size * 0.6, size * 0.4, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Détails (taches plus sombres)
+            ctx.fillStyle = grays[0];
+            ctx.beginPath();
+            ctx.ellipse(x - size * 0.2, y, size * 0.2, size * 0.15, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = grays[2];
+            ctx.beginPath();
+            ctx.ellipse(x + size * 0.15, y + size * 0.1, size * 0.15, size * 0.1, 0, 0, Math.PI * 2);
+            ctx.fill();
+        };
+        
+        // Positionner les rochers
+        const rocks = [
+            {x: 80, y: 100, size: 35},
+            {x: 250, y: 80, size: 30},
+            {x: 480, y: 200, size: 40},
+            {x: 680, y: 150, size: 32},
+            {x: 920, y: 120, size: 38},
+            {x: 180, y: 350, size: 35},
+            {x: 420, y: 500, size: 30},
+            {x: 720, y: 450, size: 40},
+            {x: 880, y: 550, size: 32}
+        ];
+        
+        rocks.forEach(rock => {
+            drawPixelRockTopDown(rock.x, rock.y, rock.size);
+        });
+
+        // 2. Ennemis (désactivés pour le moment)
+        // this.enemies.forEach(enemy => {
+        //     if (enemy.isAlive) {
+        //         enemy.render(ctx);
+        //     }
+        // });
 
         // 3. Joueur
         if (this.player) {
             this.player.render(ctx);
         }
 
-        // 4. Feedbacks
-        this.attackFeedbacks.forEach(feedback => {
-            ctx.fillStyle = feedback.color;
-            ctx.font = '16px Courier New';
-            ctx.textAlign = 'center';
-            ctx.fillText(feedback.text, feedback.x, feedback.y);
-        });
+        // 4. Feedbacks (désactivés pour le moment)
+        // this.attackFeedbacks.forEach(feedback => {
+        //     ctx.fillStyle = feedback.color;
+        //     ctx.font = '16px Courier New';
+        //     ctx.textAlign = 'center';
+        //     ctx.fillText(feedback.text, feedback.x, feedback.y);
+        // });
 
-        // 5. Menu d'amélioration
-        if (this.upgradeMenuActive) {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-
-            ctx.fillStyle = '#fff';
-            ctx.font = '24px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('Choisissez une amélioration:', this.canvas.width / 2, this.canvas.height / 2 - 60);
-
-            ctx.font = '18px Arial';
-            ctx.fillText('1 - Force (+10 dégâts)', this.canvas.width / 2, this.canvas.height / 2 - 20);
-            ctx.fillText('2 - Toxicité (+10 TP max)', this.canvas.width / 2, this.canvas.height / 2 + 10);
-            ctx.fillText('3 - Endurance (+10 HP max)', this.canvas.width / 2, this.canvas.height / 2 + 40);
-        }
+        // 5. Menu d'amélioration (désactivé pour le moment)
+        // if (this.upgradeMenuActive) {
+        //     ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        //     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        //
+        //     ctx.fillStyle = '#fff';
+        //     ctx.font = '24px Arial';
+        //     ctx.textAlign = 'center';
+        //     ctx.fillText('Choisissez une amélioration:', this.canvas.width / 2, this.canvas.height / 2 - 60);
+        //
+        //     ctx.font = '18px Arial';
+        //     ctx.fillText('1 - Force (+10 dégâts)', this.canvas.width / 2, this.canvas.height / 2 - 20);
+        //     ctx.fillText('2 - Toxicité (+10 TP max)', this.canvas.width / 2, this.canvas.height / 2 + 10);
+        //     ctx.fillText('3 - Endurance (+10 HP max)', this.canvas.width / 2, this.canvas.height / 2 + 40);
+        // }
     }
 }
 

@@ -72,9 +72,12 @@ class Phase0_Cinematic {
         this.waitingForInput = false;
         this.dialogueCooldown = 0.3; // Cooldown de 0.3 secondes avant de pouvoir continuer
         
+        console.log('📝 Dialogue suivant, index:', this.dialogueIndex, '/', this.dialogueLines.length);
+        
         if (this.dialogueIndex >= this.dialogueLines.length) {
             // Fin du dialogue, le chat repart vers la droite
             // Il reste à la même hauteur (height/2 - 50) pour ne pas croiser le chevalier
+            console.log('✅ Dialogue terminé, le chat repart');
             this.state = 'cat_leaving';
             const width = this.canvas.width;
             this.npc.setTarget(width + 50, this.canvas.height / 2 - 50);
@@ -148,8 +151,28 @@ class Phase0_Cinematic {
         }
 
         else if (this.state === 'cat_leaving') {
+            // Le chat continue à se déplacer vers la droite jusqu'à sortir de l'écran
+            // Si le chat a atteint sa cible mais n'est pas encore sorti, on le force à continuer
+            if (this.npc.hasReachedTarget && this.npc.x <= this.canvas.width + 50) {
+                // Réinitialiser hasReachedTarget pour forcer le mouvement
+                this.npc.hasReachedTarget = false;
+                // S'assurer que la cible est bien hors écran
+                this.npc.setTarget(this.canvas.width + 100, this.npc.y);
+            }
+            
             this.npc.update(deltaTime);
+            
+            // Log pour déboguer (une fois par seconde environ)
+            if (!this._leavingLogTimer) this._leavingLogTimer = 0;
+            this._leavingLogTimer += deltaTime;
+            if (this._leavingLogTimer >= 1) {
+                console.log('🐱 Chat en train de partir - Position X:', Math.round(this.npc.x), '/', this.canvas.width + 50, 'hasReachedTarget:', this.npc.hasReachedTarget);
+                this._leavingLogTimer = 0;
+            }
+            
+            // Vérifier si le chat est sorti de l'écran
             if (this.npc.x > this.canvas.width + 50) {
+                console.log('✅ Chat parti, transition vers Phase1_Roguelike');
                 this.isComplete = true;
                 this.game.nextPhase();
             }
