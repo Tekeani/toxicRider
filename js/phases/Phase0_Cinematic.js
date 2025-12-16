@@ -1,5 +1,6 @@
 class Phase0_Cinematic {
     constructor(game) {
+        console.error('PHASE0 CINEMATIC LOADED - VERSION UNIQUE');
         this.game = game;
         this.canvas = game.canvas;
         this.ctx = game.ctx;
@@ -27,6 +28,8 @@ class Phase0_Cinematic {
         this.waitingForInput = false;
         this.keys = {};
         this.arrowBlinkTimer = 0; // Timer pour la flèche clignotante
+        this.dialogueCooldown = 0; // Cooldown pour éviter les timeouts multiples
+        this.renderCount = 0; // Compteur pour voir combien de fois render est appelé
         this.setupInput();
     }
 
@@ -54,24 +57,27 @@ class Phase0_Cinematic {
         const width = this.canvas.width;
         const height = this.canvas.height;
 
-        // Le chevalier apparaît au milieu de l'écran (mais invisible au début)
+        // Le chevalier apparaît au milieu de l'écran, plus haut qu'avant
         if (!this.player) {
-            this.player = new Player(width / 2 - 80, height / 2 - 80, this.game);
+            this.player = new Player(width / 2 - 80, height / 2 - 150, this.game);
         }
         
-        // Le chat commence hors écran à gauche - UN SEUL CHAT
-        this.npc = new NPC(-50, height / 2 - 24, this.game);
+        // Le chat commence hors écran à gauche, positionné pour ne pas croiser le chevalier
+        // Le chevalier est à height / 2 - 150, donc le chat part plus bas
+        this.npc = new NPC(-50, height / 2 - 50, this.game);
     }
 
     nextDialogue() {
         this.dialogueIndex++;
         this.waitingForInput = false;
+        this.dialogueCooldown = 0.3; // Cooldown de 0.3 secondes avant de pouvoir continuer
         
         if (this.dialogueIndex >= this.dialogueLines.length) {
-            // Fin du dialogue, le chat repart
+            // Fin du dialogue, le chat repart vers la droite
+            // Il reste à la même hauteur (height/2 - 50) pour ne pas croiser le chevalier
             this.state = 'cat_leaving';
             const width = this.canvas.width;
-            this.npc.setTarget(width + 50, this.canvas.height / 2 - 24);
+            this.npc.setTarget(width + 50, this.canvas.height / 2 - 50);
         }
     }
 
@@ -96,20 +102,36 @@ class Phase0_Cinematic {
             if (this.knightAlpha >= 1) {
                 this.knightAlpha = 1;
                 this.state = 'cat_coming';
+                // Le chat s'arrête à gauche du chevalier, sans le croiser
+                // Le chevalier est à width/2 - 80, donc le chat s'arrête à width/2 - 200
+                // Le chevalier est à height/2 - 150, donc le chat reste à height/2 - 50 (plus bas)
                 this.npc.setTarget(
-                    this.canvas.width / 2 - 100,
-                    this.canvas.height / 2 - 100
+                    this.canvas.width / 2 - 200,
+                    this.canvas.height / 2 - 50
                 );
             }
         }
 
         // CHAT
         if (this.state === 'cat_coming') {
-            this.npc.update();
+            if (!this.npc) {
+                console.error('NPC non initialisé dans cat_coming');
+                return;
+            }
+            this.npc.update(deltaTime);
+            const distance = Math.sqrt(
+                Math.pow(this.npc.targetX - this.npc.x, 2) + 
+                Math.pow(this.npc.targetY - this.npc.y, 2)
+            );
+            console.log('NPC position:', this.npc.x, this.npc.y, 'Target:', this.npc.targetX, this.npc.targetY, 'Distance:', distance, 'hasReachedTarget:', this.npc.hasReachedTarget);
+            
             if (this.npc.hasReachedTarget) {
+                console.log('PASSAGE EN DIALOGUE');
                 this.state = 'dialogue';
                 this.dialogueIndex = 0;
                 this.waitingForInput = true;
+                this.arrowBlinkTimer = 0;
+                this.dialogueCooldown = 0.3;
                 console.log('Dialogue démarré, index:', this.dialogueIndex);
             }
         }
@@ -117,13 +139,16 @@ class Phase0_Cinematic {
         else if (this.state === 'dialogue') {
             // Timer pour la flèche clignotante
             this.arrowBlinkTimer += deltaTime;
-            if (!this.waitingForInput) {
-                setTimeout(() => this.waitingForInput = true, 300);
+            // Gestion du cooldown pour waitingForInput (évite les timeouts multiples)
+            this.dialogueCooldown -= deltaTime;
+            if (this.dialogueCooldown <= 0) {
+                this.waitingForInput = true;
             }
+            return; // ⛔ STOP tout le reste pendant le dialogue
         }
 
         else if (this.state === 'cat_leaving') {
-            this.npc.update();
+            this.npc.update(deltaTime);
             if (this.npc.x > this.canvas.width + 50) {
                 this.isComplete = true;
                 this.game.nextPhase();
@@ -138,6 +163,9 @@ class Phase0_Cinematic {
 
 
     render(ctx) {
+        // Nettoyer le canvas en premier
+        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        
         // Désactiver l'anti-aliasing pour un rendu pixel art
         ctx.imageSmoothingEnabled = false;
         
@@ -239,7 +267,7 @@ class Phase0_Cinematic {
         });
         
         // Réactiver l'anti-aliasing pour le reste
-        ctx.imageSmoothingEnabled = true;
+        // ctx.imageSmoothingEnabled = true;  // ← COMMENTÉ POUR TEST
 
         // FONCTION 1 : Rendu du logo (visuel)
         // RENDER — LOGO
@@ -258,7 +286,7 @@ class Phase0_Cinematic {
             ctx.restore();
         }
 
-        // FONCTION 2 : Rendu du chevalier (visuel)
+        // FONCTION 2 : Rendu du chevalier (visuel) - Affiché pendant le dialogue aussi
         if (this.player && this.state !== 'logo') {
             ctx.save();
             ctx.globalAlpha = this.knightAlpha;
@@ -266,38 +294,40 @@ class Phase0_Cinematic {
             ctx.restore();
         }
 
-        // Rendu du NPC (seulement après l'apparition du chevalier)
+        // Rendu du NPC (affiché pendant le dialogue aussi)
         if (this.npc && (this.state === 'cat_coming' || this.state === 'dialogue' || this.state === 'cat_leaving')) {
             this.npc.render(ctx);
         }
-
-        // Dialogue retiré du render() principal - sera rendu séparément
-    }
-
-    renderDialogue(ctx) {
-        // Dialogue - Style RPG (Pokémon/Final Fantasy) - RENDU APRÈS TOUT
+        
+        // Dialogue - Style RPG (Pokémon/Final Fantasy) - RENDU EN DERNIER ABSOLUMENT
         if (this.state === 'dialogue') {
-            // Réinitialiser complètement le contexte
-            ctx.save();
+            // Réinitialiser complètement le contexte canvas
             ctx.setTransform(1, 0, 0, 1, 0, 0);
-            ctx.imageSmoothingEnabled = true;
             ctx.globalAlpha = 1;
             ctx.globalCompositeOperation = 'source-over';
+            ctx.imageSmoothingEnabled = true;
             
-            // Dimensions de la fenêtre de dialogue - EN BAS DE L'ÉCRAN
-            const dialogHeight = 120;
-            const dialogX = 20;
-            const dialogY = this.canvas.height - dialogHeight - 20; // 20px du bas
-            const dialogWidth = this.canvas.width - 40;
+            // Dimensions de la fenêtre de dialogue - Responsive, positionnée pour être toujours visible
+            const dialogHeight = Math.min(120, Math.max(80, this.canvas.height * 0.15)); // 15% de la hauteur, entre 80 et 120px
+            const dialogWidth = Math.min(800, Math.max(500, this.canvas.width * 0.75)); // 75% de la largeur, entre 500 et 800px
+            const dialogX = (this.canvas.width - dialogWidth) / 2; // Centré horizontalement
+            const dialogY = this.canvas.height * 0.5; // 50% de la hauteur (au milieu de l'écran)
             
-            // Fond noir opaque - TRÈS VISIBLE
+            console.log('🔴 DÉBUT RENDU DIALOGUE');
+            console.log('Canvas:', this.canvas.width, 'x', this.canvas.height);
+            console.log('Position dialogue:', dialogX, dialogY);
+            console.log('Taille dialogue:', dialogWidth, dialogHeight);
+            
+            // Fond noir opaque pour la boîte de dialogue
             ctx.fillStyle = '#000000';
             ctx.fillRect(dialogX, dialogY, dialogWidth, dialogHeight);
+            console.log('✅ Rectangle noir dessiné');
             
             // Bordure blanche épaisse (style RPG)
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 4;
             ctx.strokeRect(dialogX, dialogY, dialogWidth, dialogHeight);
+            console.log('✅ Bordure blanche dessinée');
             
             // Bordure intérieure fine
             ctx.strokeStyle = '#ffffff';
@@ -315,17 +345,16 @@ class Phase0_Cinematic {
                 lines.forEach((line, i) => {
                     ctx.fillText(line, dialogX + 20, dialogY + 20 + (i * 24));
                 });
+                console.log('✅ Texte dessiné:', text);
             }
             
             // Flèche clignotante vers le bas (style RPG)
             if (this.waitingForInput) {
-                const arrowVisible = Math.floor(this.arrowBlinkTimer * 2) % 2 === 0; // Clignote toutes les 0.5 secondes
+                const arrowVisible = Math.floor(this.arrowBlinkTimer * 2) % 2 === 0;
                 if (arrowVisible) {
                     ctx.fillStyle = '#ffffff';
                     const arrowX = dialogX + dialogWidth - 30;
                     const arrowY = dialogY + dialogHeight - 25;
-                    
-                    // Dessiner une flèche vers le bas (triangle pointant vers le bas)
                     ctx.beginPath();
                     ctx.moveTo(arrowX, arrowY);
                     ctx.lineTo(arrowX - 8, arrowY - 8);
@@ -335,7 +364,7 @@ class Phase0_Cinematic {
                 }
             }
             
-            ctx.restore();
+            console.log('🔴 FIN RENDU DIALOGUE');
         }
     }
 

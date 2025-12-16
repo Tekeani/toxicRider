@@ -5,7 +5,7 @@ class NPC {
         this.game = game;
         this.width = 48;
         this.height = 48;
-        this.speed = 2;
+        this.speed = 120; // pixels par seconde (au lieu de pixels par frame)
         this.direction = 'right';
         this.isMoving = false;
         
@@ -65,10 +65,10 @@ class NPC {
         this.hasReachedTarget = false;
     }
 
-    update() {
+    update(deltaTime) {
         // Mettre à jour l'animation
         if (this.currentAnimation) {
-            this.currentAnimation.update(1/60); // deltaTime approximatif
+            this.currentAnimation.update(deltaTime);
         }
 
         if (this.targetX !== null && this.targetY !== null && !this.hasReachedTarget) {
@@ -78,8 +78,9 @@ class NPC {
 
             if (distance > 5) {
                 this.isMoving = true;
-                this.x += (dx / distance) * this.speed;
-                this.y += (dy / distance) * this.speed;
+                // Utiliser deltaTime pour un mouvement basé sur le temps
+                this.x += (dx / distance) * this.speed * deltaTime;
+                this.y += (dy / distance) * this.speed * deltaTime;
                 this.direction = dx < 0 ? 'left' : 'right';
                 
                 // Changer d'animation si nécessaire

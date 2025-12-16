@@ -79,9 +79,6 @@ class Game {
             const deltaTime = (time - lastTime) / 1000;
             lastTime = time;
 
-            // Nettoyer le canvas en premier
-            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
             // Mise à jour
             if (this.currentPhase) {
                 this.currentPhase.update(deltaTime, this.keys);
@@ -90,11 +87,6 @@ class Game {
             // Rendu
             if (this.currentPhase) {
                 this.currentPhase.render(this.ctx);
-                
-                // Rendre le dialogue APRÈS tout le reste si c'est Phase0_Cinematic
-                if (this.currentPhase.renderDialogue) {
-                    this.currentPhase.renderDialogue(this.ctx);
-                }
             }
 
             // Mise à jour de l'UI

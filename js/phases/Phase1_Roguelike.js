@@ -253,6 +253,9 @@ class Phase1_Roguelike {
     }
 
     render(ctx) {
+        // Nettoyer le canvas en premier
+        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        
         // 1. Fond/tiles
         if (this.tilesLoaded && this.tileMap) {
             this.tileMap.render(ctx);
