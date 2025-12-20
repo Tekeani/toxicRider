@@ -37,6 +37,7 @@ class Phase1_Roguelike {
         this.selectedUpgrade = null;
         this.gameOver = false; // État Game Over
         this.buttonPressed = false; // État du bouton Rejouer (pour l'animation)
+        this.upgradeButtonPressed = { hp: false, toxicity: false }; // État des boutons d'amélioration
 
         // IMPORTANT : Stocker les handlers pour pouvoir les retirer
         this.keydownHandler = null;
@@ -163,9 +164,33 @@ class Phase1_Roguelike {
         const wave = this.waves[this.currentWave];
         this.enemies = [];
         
-        // Pour la première vague, utiliser STRONG (30 HP) et count: 3
-        const waveType = this.currentWave === 0 ? 'STRONG' : wave.type;
-        const waveCount = this.currentWave === 0 ? 3 : wave.count;
+        // Configuration des vagues :
+        // Vague 1 : 3 ennemis avec 30 HP (STRONG)
+        // Vague 2 : 3 ennemis avec 40 HP
+        // Vague 3 : 4 ennemis avec 50 HP
+        let waveType = 'STRONG'; // Par défaut
+        let waveCount = 3;
+        let customHp = null; // HP personnalisé si nécessaire
+        
+        if (this.currentWave === 0) {
+            // Vague 1 : 3 ennemis avec 30 HP
+            waveType = 'STRONG';
+            waveCount = 3;
+        } else if (this.currentWave === 1) {
+            // Vague 2 : 3 ennemis avec 40 HP
+            waveType = 'STRONG'; // On utilise STRONG comme base, mais on modifiera les HP
+            waveCount = 3;
+            customHp = 40;
+        } else if (this.currentWave === 2) {
+            // Vague 3 : 4 ennemis avec 50 HP
+            waveType = 'STRONG'; // On utilise STRONG comme base, mais on modifiera les HP
+            waveCount = 4;
+            customHp = 50;
+        } else {
+            // Autres vagues : utiliser la configuration par défaut
+            waveType = wave.type;
+            waveCount = wave.count;
+        }
 
         for (let i = 0; i < waveCount; i++) {
             const angle = (Math.PI * 2 * i) / waveCount;
@@ -173,7 +198,14 @@ class Phase1_Roguelike {
             const x = this.canvas.width / 2 + Math.cos(angle) * distance;
             const y = this.canvas.height / 2 + Math.sin(angle) * distance;
 
-            const enemy = new Enemy(x, y, waveType, this.game);  // ← FIX : utiliser waveType au lieu de wave.type
+            const enemy = new Enemy(x, y, waveType, this.game);
+            
+            // Si un HP personnalisé est défini, l'appliquer
+            if (customHp !== null) {
+                enemy.hp = customHp;
+                enemy.maxHp = customHp;
+            }
+            
             this.enemies.push(enemy);
         }
     }
@@ -308,19 +340,39 @@ class Phase1_Roguelike {
 
         const playerData = this.game.playerData;
 
-        if (stat === 'strength') {
-            playerData.strength += 10;
-        } else if (stat === 'toxicity') {
-            playerData.maxMana += 10;
-            playerData.mana = playerData.maxMana;
-        } else if (stat === 'endurance') {
+        // Remettre la vie et la toxicité au maximum avant d'appliquer l'amélioration
+        playerData.hp = playerData.maxHp;
+        playerData.mana = playerData.maxMana;
+
+        if (stat === 'hp') {
+            // Augmenter les HP max de 10
             playerData.maxHp += 10;
-            playerData.hp = playerData.maxHp;
+            playerData.hp = playerData.maxHp; // Remettre au max après augmentation
+            console.log('💚 +10 HP :', playerData.hp, '/', playerData.maxHp);
+        } else if (stat === 'toxicity') {
+            // Augmenter la toxicité max de 10
+            playerData.maxMana += 10;
+            playerData.mana = playerData.maxMana; // Remettre au max après augmentation
+            console.log('💜 +10 Toxicité :', playerData.mana, '/', playerData.maxMana);
         }
 
+        // CRITIQUE : Synchroniser les valeurs dans l'instance Player
+        if (this.player) {
+            this.player.mana = playerData.mana;
+            this.player.maxMana = playerData.maxMana;
+        }
+
+        // Fermer le menu et passer à la vague suivante
         this.upgradeMenuActive = false;
+        this.upgradeButtonPressed = { hp: false, toxicity: false };
+        // Réinitialiser les flags de touches pour éviter qu'ils restent bloqués
+        this._toxicityPressed = false;
+        this._attackPressed = false;
         this.currentWave++;
-        this.spawnWave();
+        
+        // Démarrer le décompte pour la prochaine vague
+        this.waveStartTimer = this.waveStartDelay;
+        console.log('⏰ Démarrage du décompte pour la vague', this.currentWave + 1);
     }
 
     update(deltaTime, keys) {
@@ -335,13 +387,16 @@ class Phase1_Roguelike {
             return;
         }
         
-        // Gérer le compte à rebours de la vague
-        if (this.waveStartTimer > 0) {
-            this.waveStartTimer -= deltaTime;
-            if (this.waveStartTimer <= 0) {
-                // Lancer la première vague
-                this.spawnWave();
-                this.waveStartTimer = 0;
+        // Ne pas mettre à jour le décompte si le menu d'amélioration est actif
+        if (!this.upgradeMenuActive) {
+            // Gérer le compte à rebours de la vague
+            if (this.waveStartTimer > 0) {
+                this.waveStartTimer -= deltaTime;
+                if (this.waveStartTimer <= 0) {
+                    // Lancer la vague
+                    this.spawnWave();
+                    this.waveStartTimer = 0;
+                }
             }
         }
         
@@ -458,10 +513,12 @@ class Phase1_Roguelike {
             console.log('💀 Game Over - Le joueur est mort');
         }
 
-        // Pas de vérification de vague pour le moment
-        // if (this.enemies.length === 0 && !this.allWavesComplete && this.currentWave < this.waves.length) {
-        //     this.upgradeMenuActive = true;
-        // }
+        // Vérifier si tous les ennemis sont morts et afficher le menu d'amélioration
+        if (this.enemies.length === 0 && !this.allWavesComplete && this.currentWave < this.waves.length && !this.upgradeMenuActive && this.waveStartTimer <= 0) {
+            // Tous les ennemis sont morts, activer le menu d'amélioration
+            this.upgradeMenuActive = true;
+            console.log('✅ Tous les ennemis sont morts, affichage du menu d\'amélioration');
+        }
 
         // Pas de passage à la phase suivante pour le moment
         // if (this.enemies.length === 0 && this.allWavesComplete) {
@@ -637,7 +694,7 @@ class Phase1_Roguelike {
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             const countdown = Math.ceil(this.waveStartTimer);
-            ctx.fillText(`Vague ennemie approche !`, this.canvas.width / 2, this.canvas.height / 2 - 40);
+            ctx.fillText(`Vague d'ennemis en approche`, this.canvas.width / 2, this.canvas.height / 2 - 40);
             ctx.fillText(`${countdown}`, this.canvas.width / 2, this.canvas.height / 2 + 20);
         }
         
@@ -676,7 +733,55 @@ class Phase1_Roguelike {
             ctx.fillText(insult.text, insult.x, insult.y);
         });
 
-        // 6. Écran Game Over (dessiné en dernier pour être au-dessus de tout)
+        // 6. Menu d'amélioration (dessiné avant Game Over)
+        if (this.upgradeMenuActive) {
+            // Fond semi-transparent
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            
+            // Titre
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 36px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('Choisissez votre amélioration', this.canvas.width / 2, this.canvas.height / 2 - 120);
+            
+            // Dimensions des boutons
+            const buttonWidth = 250;
+            const buttonHeight = 60;
+            const buttonSpacing = 30;
+            const totalWidth = (buttonWidth * 2) + buttonSpacing;
+            const startX = this.canvas.width / 2 - totalWidth / 2;
+            const buttonY = this.canvas.height / 2 + 20;
+            
+            // Bouton +10 HP
+            const hpButtonX = startX;
+            const hpPressOffset = this.upgradeButtonPressed.hp ? 3 : 0;
+            ctx.fillStyle = this.upgradeButtonPressed.hp ? '#228822' : '#33aa33';
+            ctx.fillRect(hpButtonX, buttonY + hpPressOffset, buttonWidth, buttonHeight);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(hpButtonX, buttonY + hpPressOffset, buttonWidth, buttonHeight);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('+10 Santé', hpButtonX + buttonWidth / 2, buttonY + hpPressOffset + buttonHeight / 2);
+            
+            // Bouton +10 Toxicité
+            const toxicityButtonX = startX + buttonWidth + buttonSpacing;
+            const toxicityPressOffset = this.upgradeButtonPressed.toxicity ? 3 : 0;
+            ctx.fillStyle = this.upgradeButtonPressed.toxicity ? '#882288' : '#aa33aa';
+            ctx.fillRect(toxicityButtonX, buttonY + toxicityPressOffset, buttonWidth, buttonHeight);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(toxicityButtonX, buttonY + toxicityPressOffset, buttonWidth, buttonHeight);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('+10 Toxicité', toxicityButtonX + buttonWidth / 2, buttonY + toxicityPressOffset + buttonHeight / 2);
+        }
+        
+        // 7. Écran Game Over (dessiné en dernier pour être au-dessus de tout)
         if (this.gameOver) {
             // Fond semi-transparent
             ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
@@ -728,6 +833,8 @@ class Phase1_Roguelike {
         // Réinitialiser l'état Game Over et le bouton
         this.gameOver = false;
         this.buttonPressed = false;
+        this.upgradeMenuActive = false;
+        this.upgradeButtonPressed = { hp: false, toxicity: false };
         
         // Réinitialiser les données du joueur
         this.game.playerData.hp = PLAYER_CONFIG.INITIAL_HP;
@@ -754,8 +861,43 @@ class Phase1_Roguelike {
         this.waveStartTimer = this.waveStartDelay;
     }
     
-    // Méthode pour gérer les clics (pour le bouton Rejouer)
+    // Méthode pour gérer les clics (pour le bouton Rejouer et les boutons d'amélioration)
     handleClick(x, y) {
+        // Gérer les clics sur les boutons d'amélioration
+        if (this.upgradeMenuActive) {
+            const buttonWidth = 250;
+            const buttonHeight = 60;
+            const buttonSpacing = 30;
+            const totalWidth = (buttonWidth * 2) + buttonSpacing;
+            const startX = this.canvas.width / 2 - totalWidth / 2;
+            const buttonY = this.canvas.height / 2 + 20;
+            
+            // Bouton +10 HP
+            const hpButtonX = startX;
+            if (x >= hpButtonX && x <= hpButtonX + buttonWidth && 
+                y >= buttonY && y <= buttonY + buttonHeight) {
+                this.upgradeButtonPressed.hp = true;
+                setTimeout(() => {
+                    this.upgradeButtonPressed.hp = false;
+                    this.upgradeStat('hp');
+                }, 150);
+                return;
+            }
+            
+            // Bouton +10 Toxicité
+            const toxicityButtonX = startX + buttonWidth + buttonSpacing;
+            if (x >= toxicityButtonX && x <= toxicityButtonX + buttonWidth && 
+                y >= buttonY && y <= buttonY + buttonHeight) {
+                this.upgradeButtonPressed.toxicity = true;
+                setTimeout(() => {
+                    this.upgradeButtonPressed.toxicity = false;
+                    this.upgradeStat('toxicity');
+                }, 150);
+                return;
+            }
+        }
+        
+        // Gérer les clics sur le bouton Rejouer (Game Over)
         if (!this.gameOver) return;
         
         const buttonWidth = 200;
