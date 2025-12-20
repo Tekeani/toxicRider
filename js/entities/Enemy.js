@@ -56,7 +56,7 @@ class Enemy {
         }
     }
 
-    update() {
+    update(deltaTime = 1/60) {
         if (!this.isAlive) return;
 
         // IA simple : se diriger vers le joueur
@@ -67,14 +67,44 @@ class Enemy {
             const distance = Math.sqrt(dx * dx + dy * dy);
 
             if (distance > 0) {
-                this.x += (dx / distance) * this.speed;
-                this.y += (dy / distance) * this.speed;
+                // Calculer la vitesse par seconde (comme le joueur)
+                const speedPerSecond = this.speed * 60;
+                const moveX = (dx / distance) * speedPerSecond * deltaTime;
+                const moveY = (dy / distance) * speedPerSecond * deltaTime;
+                
+                // Calculer la nouvelle position
+                let newX = this.x + moveX;
+                let newY = this.y + moveY;
+                
+                // Appliquer les mêmes limites que le joueur
+                const canvas = this.game.canvas;
+                
+                // Limites gauche/droite : 0 à canvas.width - width
+                newX = Math.max(0, Math.min(canvas.width - this.width, newX));
+                
+                // Limites haut/bas : 0 à 70% de la hauteur visible - height (même que le joueur)
+                const visibleHeight = Math.floor(canvas.height * 0.70);
+                const maxY = visibleHeight - this.height;
+                newY = Math.max(0, Math.min(maxY, newY));
+                
+                // Appliquer les nouvelles positions
+                this.x = newX;
+                this.y = newY;
+                
                 this.direction = dx < 0 ? 'left' : 'right';
             }
             
             // Note : Les attaques sont gérées tour à tour dans Phase1_Roguelike.update()
             // pour éviter que tous les ennemis attaquent en même temps
         }
+    }
+    
+    // Vérifier si cet ennemi chevauche avec un autre ennemi
+    overlapsWith(other) {
+        return this.x < other.x + other.width &&
+               this.x + this.width > other.x &&
+               this.y < other.y + other.height &&
+               this.y + this.height > other.y;
     }
 
     attack(player) {

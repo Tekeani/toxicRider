@@ -81,8 +81,11 @@ class Phase1_Roguelike {
             if ((e.key === 'e' || e.key === 'E' || e.key === 'Enter')) {
                 e.preventDefault(); // Empêcher le comportement par défaut
                 
+                // CRITIQUE : Ne déclencher l'attaque QUE si _attackPressed est false
+                // ET ne JAMAIS permettre une nouvelle attaque tant que la touche n'est pas relâchée
                 if (!this._attackPressed) {
-                    this._attackPressed = true;
+                    this._attackPressed = true; // ← Marquer IMMÉDIATEMENT
+                    
                     if (this.player && !this.upgradeMenuActive && !this.player.isAttacking) {
                         console.log('🗡️ Attaque déclenchée depuis Phase1');
                         this.player.attack();
@@ -170,7 +173,7 @@ class Phase1_Roguelike {
             const x = this.canvas.width / 2 + Math.cos(angle) * distance;
             const y = this.canvas.height / 2 + Math.sin(angle) * distance;
 
-            const enemy = new Enemy(x, y, wave.type, this.game);
+            const enemy = new Enemy(x, y, waveType, this.game);  // ← FIX : utiliser waveType au lieu de wave.type
             this.enemies.push(enemy);
         }
     }
@@ -180,40 +183,55 @@ class Phase1_Roguelike {
 
         const player = this.player;
         const damage = 10; // Coup d'épée = 10 dégâts
-        // Portée de contact : lorsque les hitboxes se touchent (moitié de chaque côté)
-        // Les ennemis et le joueur font 160x160, donc contactRange = 160
-        const contactRange = 160;
+        // Portée de contact : moitié du joueur (80) + moitié de l'ennemi (24) = 104 pixels
+        // Le joueur fait 160x160, les ennemis font 48x48
+        const contactRange = (player.width / 2) + 48; // ~104 pixels
 
-        // Appliquer les dégâts une seule fois au milieu de l'animation
-        if (!player._damageApplied && player.isAttacking) {
-            const attackFrame = 10; // Frame clé de l'attaque
-            if (player.currentAnimation && player.currentAnimation.currentFrame === attackFrame) {
-                this.enemies.forEach(enemy => {
-                    if (enemy.isAlive) {
-                        // Calculer la distance au contact (considérer les hitboxes)
-                        const playerCenterX = player.x + player.width / 2;
-                        const playerCenterY = player.y + player.height / 2;
-                        const enemyCenterX = enemy.x + enemy.width / 2;
-                        const enemyCenterY = enemy.y + enemy.height / 2;
-                        const dx = enemyCenterX - playerCenterX;
-                        const dy = enemyCenterY - playerCenterY;
-                        const distance = Math.sqrt(dx * dx + dy * dy);
+        // CRITIQUE : Vérifier STRICTEMENT que les dégâts n'ont pas déjà été appliqués
+        if (player._damageApplied === true) {
+            return; // ← AJOUT DE CETTE LIGNE
+        }
 
-                        // Attaque au corps à corps : doit être au contact
-                        if (distance <= contactRange) {
-                            enemy.takeDamage(damage);
-                            this.attackFeedbacks.push({
-                                text: `-${damage}`,
-                                x: enemy.x + enemy.width / 2,
-                                y: enemy.y,
-                                color: '#ff0000',
-                                timer: 60
-                            });
-                        }
+        // CRITIQUE : Appliquer les dégâts UNE SEULE FOIS au début de l'attaque
+        // On supprime toute vérification de frame pour éviter les appels multiples
+        if (!player._damageApplied) {
+            // Trouver l'ennemi le plus proche dans la portée
+            let targetEnemy = null;
+            let closestDistance = Infinity;
+            
+            this.enemies.forEach(enemy => {
+                if (enemy.isAlive) {
+                    // Calculer la distance au contact (considérer les hitboxes)
+                    const playerCenterX = player.x + player.width / 2;
+                    const playerCenterY = player.y + player.height / 2;
+                    const enemyCenterX = enemy.x + enemy.width / 2;
+                    const enemyCenterY = enemy.y + enemy.height / 2;
+                    const dx = enemyCenterX - playerCenterX;
+                    const dy = enemyCenterY - playerCenterY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    // Attaque au corps à corps : doit être au contact
+                    if (distance <= contactRange && distance < closestDistance) {
+                        closestDistance = distance;
+                        targetEnemy = enemy;
                     }
+                }
+            });
+            
+            // Appliquer les dégâts seulement à l'ennemi le plus proche
+            if (targetEnemy) {
+                targetEnemy.takeDamage(damage);
+                this.attackFeedbacks.push({
+                    text: `-${damage}`,
+                    x: targetEnemy.x + targetEnemy.width / 2,
+                    y: targetEnemy.y,
+                    color: '#ff0000',
+                    timer: 60
                 });
-                player._damageApplied = true;
             }
+            
+            // Marquer immédiatement pour éviter les doubles appels
+            player._damageApplied = true;
         }
     }
 
@@ -221,19 +239,25 @@ class Phase1_Roguelike {
         if (this.player && this.player.useToxicity()) {
             const player = this.player;
             const damage = 30; // Insulte = 30 dégâts
-            const range = 150;
+            const range = 400; // Portée augmentée pour une attaque à distance
             
             // Choisir une insulte aléatoire
             const randomInsult = this.insultList[Math.floor(Math.random() * this.insultList.length)];
             
             // Trouver l'ennemi le plus proche pour orienter l'insulte
+            // Utiliser les centres des hitboxes pour un calcul de distance précis
             let closestEnemy = null;
-            let closestDistance = range;
+            let closestDistance = Infinity; // Utiliser Infinity pour trouver le plus proche même à la limite
             
             this.enemies.forEach(enemy => {
                 if (enemy.isAlive) {
-                    const dx = enemy.x - player.x;
-                    const dy = enemy.y - player.y;
+                    // Calculer la distance entre les centres des hitboxes
+                    const playerCenterX = player.x + player.width / 2;
+                    const playerCenterY = player.y + player.height / 2;
+                    const enemyCenterX = enemy.x + enemy.width / 2;
+                    const enemyCenterY = enemy.y + enemy.height / 2;
+                    const dx = enemyCenterX - playerCenterX;
+                    const dy = enemyCenterY - playerCenterY;
                     const distance = Math.sqrt(dx * dx + dy * dy);
                     
                     if (distance <= range && distance < closestDistance) {
@@ -264,25 +288,18 @@ class Phase1_Roguelike {
                 progress: 0 // Progression vers la cible (0 à 1)
             });
 
-            // Appliquer les dégâts à tous les ennemis à portée
-            this.enemies.forEach(enemy => {
-                if (enemy.isAlive) {
-                    const dx = enemy.x - player.x;
-                    const dy = enemy.y - player.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-
-                    if (distance <= range) {
-                        enemy.takeDamage(damage);
-                        this.attackFeedbacks.push({
-                            text: `-${damage}`,
-                            x: enemy.x + enemy.width / 2,
-                            y: enemy.y,
-                            color: '#00ffff',
-                            timer: 60
-                        });
-                    }
-                }
-            });
+            // Appliquer les dégâts à UN SEUL ennemi (le plus proche) à portée
+            // Utiliser le même closestEnemy trouvé précédemment pour la cohérence
+            if (closestEnemy) {
+                closestEnemy.takeDamage(damage);
+                this.attackFeedbacks.push({
+                    text: `-${damage}`,
+                    x: closestEnemy.x + closestEnemy.width / 2,
+                    y: closestEnemy.y,
+                    color: '#00ffff',
+                    timer: 60
+                });
+            }
         }
     }
 
@@ -344,11 +361,58 @@ class Phase1_Roguelike {
         }
 
         // Mise à jour des ennemis (déplacement vers le joueur)
+        // D'abord, calculer les nouvelles positions
         this.enemies.forEach(enemy => {
             if (enemy.isAlive) {
-                enemy.update();
+                enemy.update(deltaTime);
             }
         });
+        
+        // Ensuite, résoudre les collisions entre ennemis pour éviter qu'ils fusionnent
+        for (let i = 0; i < this.enemies.length; i++) {
+            if (!this.enemies[i].isAlive) continue;
+            
+            for (let j = i + 1; j < this.enemies.length; j++) {
+                if (!this.enemies[j].isAlive) continue;
+                
+                const enemy1 = this.enemies[i];
+                const enemy2 = this.enemies[j];
+                
+                // Si les ennemis se chevauchent, les séparer
+                if (enemy1.overlapsWith(enemy2)) {
+                    const dx = enemy2.x - enemy1.x;
+                    const dy = enemy2.y - enemy1.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy) || 1;
+                    
+                    // Distance minimale pour éviter le chevauchement (somme des rayons)
+                    const minDistance = (enemy1.width + enemy2.width) / 2;
+                    const overlap = minDistance - distance;
+                    
+                    if (overlap > 0) {
+                        // Séparer les ennemis
+                        const separationX = (dx / distance) * overlap * 0.5;
+                        const separationY = (dy / distance) * overlap * 0.5;
+                        
+                        // Déplacer les ennemis en sens opposés
+                        enemy1.x -= separationX;
+                        enemy1.y -= separationY;
+                        enemy2.x += separationX;
+                        enemy2.y += separationY;
+                        
+                        // Réappliquer les limites après séparation
+                        const canvas = this.canvas;
+                        const visibleHeight = Math.floor(canvas.height * 0.70);
+                        const maxY = visibleHeight - enemy1.height;
+                        
+                        enemy1.x = Math.max(0, Math.min(canvas.width - enemy1.width, enemy1.x));
+                        enemy1.y = Math.max(0, Math.min(maxY, enemy1.y));
+                        
+                        enemy2.x = Math.max(0, Math.min(canvas.width - enemy2.width, enemy2.x));
+                        enemy2.y = Math.max(0, Math.min(maxY, enemy2.y));
+                    }
+                }
+            }
+        }
         
         // Attaque des ennemis (tour à tour, pas tous en même temps)
         if (this.enemies.length > 0 && this.waveStartTimer <= 0) {

@@ -103,10 +103,12 @@ class Player {
             // Vérifier si l'attaque est terminée
             const attackDuration = this.animations.attack.frames.length * this.animations.attack.frameDuration;
             if (this.attackTimer >= attackDuration) {
-                // Fin de l'attaque
-                this.isAttacking = false;
-                this.attackTimer = 0;
+                // CRITIQUE : Remettre isAttacking à false AVANT _damageApplied
+                // L'ordre est CRITIQUE : on remet _damageApplied en premier, puis isAttacking = false en dernier
+                // pour que playerAttack() ne soit plus appelé avant que _damageApplied soit reset
                 this._damageApplied = false;
+                this.attackTimer = 0;
+                this.isAttacking = false;  // ← DÉPLACÉ EN DERNIER
             }
             
             // Pendant l'attaque, ne pas gérer le mouvement
@@ -183,12 +185,12 @@ class Player {
             return;
         }
         
-        console.log('⚔️ Démarrage attaque - Direction:', this.direction);
+        console.log('⚔️ NOUVELLE ATTAQUE - _damageApplied réinitialisé');
         
         // Démarrer l'attaque
         this.isAttacking = true;
         this.attackTimer = 0;
-        this._damageApplied = false;
+        this._damageApplied = false; // ← Confirme que c'est bien remis à false
         
         // IMPORTANT : Figer la direction pendant l'attaque
         this._attackDirection = this.direction;
