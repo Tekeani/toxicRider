@@ -8,7 +8,7 @@ class Phase2_Riddle {
         
         // État de transition
         this.transitionActive = true;
-        this.transitionText = "Après une longue marche...";
+        this.transitionText = "Après une bien trop longue marche...";
         this.waitingForInput = false;
         this.transitionComplete = false;
         this.transitionArrowBlinkTimer = 0;

@@ -370,7 +370,16 @@ class Phase1_Roguelike {
         this._attackPressed = false;
         this.currentWave++;
         
-        // Démarrer le décompte pour la prochaine vague
+        // Si on vient de terminer la vague 3, passer à la phase suivante (énigme)
+        if (this.currentWave >= this.waves.length) {
+            console.log('🎉 Toutes les vagues terminées, passage à la phase énigme');
+            setTimeout(() => {
+                this.game.nextPhase();
+            }, 500);
+            return;
+        }
+        
+        // Sinon, démarrer le décompte pour la prochaine vague
         this.waveStartTimer = this.waveStartDelay;
         console.log('⏰ Démarrage du décompte pour la vague', this.currentWave + 1);
     }
