@@ -1,3 +1,10 @@
+// Protection contre le chargement multiple
+if (window._gameScriptLoaded) {
+    console.error('❌ game.js déjà chargé ! Arrêt pour éviter les doublons.');
+    throw new Error('Script déjà chargé');
+}
+window._gameScriptLoaded = true;
+
 class Game {
     constructor(canvasId) {
         this.canvas = document.getElementById(canvasId);
@@ -65,9 +72,11 @@ class Game {
 
     startGameLoop() {
         if (this.gameLoopRunning) {
+            console.warn('⚠️ Game loop DÉJÀ en cours ! Tentative de démarrage ignorée.');
             return;
         }
 
+        console.log('🎮 Démarrage de la game loop');
         this.gameLoopRunning = true;
         let lastTime = performance.now();
 
@@ -75,18 +84,38 @@ class Game {
             if (!this.gameLoopRunning) {
                 return;
             }
+            
+            // COMPTEUR GLOBAL
+            if (!window._gameLoopCount) window._gameLoopCount = 0;
+            window._gameLoopCount++;
+            
+            if (window._gameLoopCount % 60 === 0) {
+                console.log('🔢 GameLoop iteration:', window._gameLoopCount);
+            }
 
             const deltaTime = (time - lastTime) / 1000;
             lastTime = time;
+
+            // LOG COMBIEN DE FOIS ON APPELLE RENDER
+            const renderCountBefore = this.currentPhase?._renderCount || 0;
 
             // Mise à jour
             if (this.currentPhase) {
                 this.currentPhase.update(deltaTime, this.keys);
             }
 
-            // Rendu
-            if (this.currentPhase) {
+            // Rendu - FORCER 1 SEUL APPEL
+            if (this.currentPhase && !this._rendering) {
+                this._rendering = true;
                 this.currentPhase.render(this.ctx);
+                this._rendering = false;
+            }
+            
+            const renderCountAfter = this.currentPhase?._renderCount || 0;
+            const renderCallsThisFrame = renderCountAfter - renderCountBefore;
+            
+            if (renderCallsThisFrame > 1) {
+                console.error('❌ PROBLÈME: render() appelé', renderCallsThisFrame, 'fois dans UNE SEULE frame !');
             }
 
             // Mise à jour de l'UI
@@ -143,12 +172,9 @@ class Game {
 let game = null;
 
 window.addEventListener('DOMContentLoaded', () => {
-    if (window._gameScriptLoaded) {
-        console.warn('Game déjà initialisé');
-        return;
-    }
-    window._gameScriptLoaded = true;
-
+    // SUPPRESSION de la protection qui bloque
+    console.log('🎮 Initialisation du jeu...');
+    
     game = new Game('gameCanvas');
     game.init().catch(err => {
         console.error('Erreur lors de l\'initialisation du jeu:', err);

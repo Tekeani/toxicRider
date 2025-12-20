@@ -20,6 +20,10 @@ class Phase1_Roguelike {
         this.upgradeMenuActive = false;
         this.selectedUpgrade = null;
 
+        // IMPORTANT : Stocker les handlers pour pouvoir les retirer
+        this.keydownHandler = null;
+        this.keyupHandler = null;
+
         this.setupInput();
     }
 
@@ -51,29 +55,34 @@ class Phase1_Roguelike {
     }
 
     setupInput() {
-        document.addEventListener('keydown', (e) => {
-            // Attaque à l'épée (E ou Enter)
-            if ((e.key === 'e' || e.key === 'E' || e.key === 'Enter') && !this._attackPressed) {
-                this._attackPressed = true;
-                if (this.player && !this.upgradeMenuActive) {
-                    this.player.attack();
+        // Créer les handlers comme des fonctions fléchées pour garder le contexte
+        this.keydownHandler = (e) => {
+            // CRITIQUE : Empêcher la propagation pour éviter les doubles déclenchements
+            if ((e.key === 'e' || e.key === 'E' || e.key === 'Enter')) {
+                e.preventDefault(); // Empêcher le comportement par défaut
+                
+                if (!this._attackPressed) {
+                    this._attackPressed = true;
+                    if (this.player && !this.upgradeMenuActive && !this.player.isAttacking) {
+                        console.log('🗡️ Attaque déclenchée depuis Phase1');
+                        this.player.attack();
+                    }
                 }
+                return; // Sortir immédiatement
             }
 
-            // Sort/Toxicité (R)
-            if ((e.key === 'r' || e.key === 'R') && !this._toxicityPressed) {
-                this._toxicityPressed = true;
-                if (this.player && !this.upgradeMenuActive) {
-                    this.useToxicity();
+            if ((e.key === 'r' || e.key === 'R')) {
+                e.preventDefault();
+                
+                if (!this._toxicityPressed) {
+                    this._toxicityPressed = true;
+                    if (this.player && !this.upgradeMenuActive) {
+                        this.useToxicity();
+                    }
                 }
+                return;
             }
 
-            // Blocage (Shift)
-            if (e.key === 'Shift' && this.player) {
-                this.player.block(true);
-            }
-
-            // Menu d'amélioration
             if (this.upgradeMenuActive) {
                 if (e.key === '1') {
                     this.upgradeStat('strength');
@@ -83,9 +92,9 @@ class Phase1_Roguelike {
                     this.upgradeStat('endurance');
                 }
             }
-        });
+        };
 
-        document.addEventListener('keyup', (e) => {
+        this.keyupHandler = (e) => {
             if (e.key === 'e' || e.key === 'E' || e.key === 'Enter') {
                 this._attackPressed = false;
             }
@@ -93,11 +102,21 @@ class Phase1_Roguelike {
             if (e.key === 'r' || e.key === 'R') {
                 this._toxicityPressed = false;
             }
+        };
 
-            if (e.key === 'Shift' && this.player) {
-                this.player.block(false);
-            }
-        });
+        // Ajouter les listeners
+        document.addEventListener('keydown', this.keydownHandler);
+        document.addEventListener('keyup', this.keyupHandler);
+    }
+
+    // Méthode pour nettoyer les listeners (important pour éviter les fuites mémoire)
+    cleanup() {
+        if (this.keydownHandler) {
+            document.removeEventListener('keydown', this.keydownHandler);
+        }
+        if (this.keyupHandler) {
+            document.removeEventListener('keyup', this.keyupHandler);
+        }
     }
 
     spawnWave() {
@@ -260,8 +279,28 @@ class Phase1_Roguelike {
     }
 
     render(ctx) {
-        // Nettoyer le canvas en premier
-        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        // GUARD ANTI-RÉCURSION
+        if (this._isCurrentlyRendering) {
+            return; // Bloquer les appels récursifs
+        }
+        this._isCurrentlyRendering = true;
+        
+        try {
+            // LOG: Vérifier combien de fois render est appelé
+            if (!this._renderCount) this._renderCount = 0;
+            this._renderCount++;
+            
+            if (this.player && this.player.isAttacking && Math.random() < 0.1) {
+                console.log('📺 Phase1 render #' + this._renderCount, {
+                    hasPlayer: !!this.player,
+                    playerAttacking: this.player.isAttacking,
+                    playerX: this.player.x,
+                    playerY: this.player.y
+                });
+            }
+            
+            // Nettoyer le canvas en premier
+            ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         
         // Désactiver l'anti-aliasing pour un rendu pixel art
         ctx.imageSmoothingEnabled = false;
@@ -369,6 +408,14 @@ class Phase1_Roguelike {
         // });
 
         // 3. Joueur
+        if (this.player && this.player.isAttacking && Math.random() < 0.2) {
+            console.log('🎨 Avant player.render():', {
+                hasPlayer: !!this.player,
+                spriteLoaded: this.player.spriteLoaded,
+                hasSpriteSheet: !!this.player.spriteSheet,
+                hasCurrentAnim: !!this.player.currentAnimation
+            });
+        }
         if (this.player) {
             this.player.render(ctx);
         }
@@ -396,6 +443,10 @@ class Phase1_Roguelike {
         //     ctx.fillText('2 - Toxicité (+10 TP max)', this.canvas.width / 2, this.canvas.height / 2 + 10);
         //     ctx.fillText('3 - Endurance (+10 HP max)', this.canvas.width / 2, this.canvas.height / 2 + 40);
         // }
+        } finally {
+            // TOUJOURS remettre à false
+            this._isCurrentlyRendering = false;
+        }
     }
 }
 

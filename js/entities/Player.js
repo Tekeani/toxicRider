@@ -22,8 +22,6 @@ class Player {
         this.attackTimer = 0;
         this._damageApplied = false;
         this.isBlocking = false;
-        // FIX 1 : Verrou d'entrée d'attaque
-        this.hasStartedAttack = false;
 
         this.mana = game.playerData.mana || 30;
         this.maxMana = game.playerData.maxMana || 30;
@@ -38,9 +36,15 @@ class Player {
         const img = new Image();
         img.onload = () => {
             if (img.complete && img.naturalWidth > 0) {
+                // CRITIQUE : Créer un SpriteSheet avec le bon nombre de frames par row
                 this.spriteSheet = new SpriteSheet(img, 64, 64);
+                
+                // FORCER le bon nombre de colonnes basé sur ton sprite sheet
+                this.spriteSheet.framesPerRow = 8;
+                
                 this.setupAnimations();
                 this.spriteLoaded = true;
+                console.log('✅ Sprite chargé et animations configurées');
             } else {
                 console.error('Sprite non chargé correctement');
             }
@@ -52,15 +56,30 @@ class Player {
     setupAnimations() {
         if (!this.spriteSheet) return;
         this.animations.idle = new Animation(this.spriteSheet, [0,1,2,3], 0.25, true);
-        this.animations.run = new Animation(this.spriteSheet, [10,11,12,13,14,15], 0.12, true);
-        this.animations.attack = new Animation(this.spriteSheet, [
-            20,21,22,23,24,25,26,27,28,29,
-            30,31,32,33,34,35,36,37,38,39
-        ], 0.07, false);
+        this.animations.run = new Animation(this.spriteSheet, [8,9,10,11,12,13], 0.12, true);
+        // FIX : row 5 commence à l'index 32 (row 1=0-7, row 2=8-15, row 3=16-23, row 4=24-31, row 5=32-39)
+        // Doc dit frames 19-24 = 6 frames, donc indices 32-37 dans un sprite à 8 colonnes
+        this.animations.attack = new Animation(this.spriteSheet, [32,33,34,35,36,37], 0.12, false);
         this.animations.block = new Animation(this.spriteSheet, [50,51,52,53,54,55,56,57,58,59], 0.12, true);
         this.animations.dead = new Animation(this.spriteSheet, [40,41,42,43,44,45,46,47,48,49], 0.15, false);
 
         this.currentAnimation = this.animations.idle;
+        this.currentAnimation.play();
+    }
+
+    switchAnimation(newAnimation) {
+        // Ne change l'animation QUE si c'est différent
+        if (this.currentAnimation === newAnimation) {
+            return; // Déjà sur cette animation
+        }
+        
+        // Ne jamais interrompre une animation non-loop en cours
+        if (this.currentAnimation && !this.currentAnimation.loop && this.currentAnimation.isPlaying) {
+            return; // On attend la fin
+        }
+        
+        // Changer d'animation
+        this.currentAnimation = newAnimation;
         this.currentAnimation.play();
     }
 
@@ -70,14 +89,36 @@ class Player {
             return;
         }
         
-        if (this.toxicityCooldown > 0) this.toxicityCooldown -= deltaTime * 60; // Convertir en frames pour compatibilité
+        if (this.toxicityCooldown > 0) this.toxicityCooldown -= deltaTime * 60;
 
-        // Mouvement basé sur deltaTime (vitesse en pixels par seconde)
-        const speedPerSecond = this.speed * 60; // Convertir de pixels/frame à pixels/seconde (3 * 60 = 180 px/s)
+        // ========== GESTION DE L'ATTAQUE EN PRIORITÉ ==========
+        if (this.isAttacking) {
+            this.attackTimer += deltaTime;
+            
+            // Mettre à jour l'animation d'attaque
+            if (this.currentAnimation) {
+                this.currentAnimation.update(deltaTime);
+            }
+            
+            // Vérifier si l'attaque est terminée
+            const attackDuration = this.animations.attack.frames.length * this.animations.attack.frameDuration;
+            if (this.attackTimer >= attackDuration) {
+                // Fin de l'attaque
+                this.isAttacking = false;
+                this.attackTimer = 0;
+                this._damageApplied = false;
+            }
+            
+            // Pendant l'attaque, ne pas gérer le mouvement
+            return;
+        }
+        // ======================================================
+
+        // Mouvement (seulement si pas en attaque)
+        const speedPerSecond = this.speed * 60;
         this.isMoving = false;
         let newX = this.x, newY = this.y;
         
-        // Détection des touches de mouvement
         if (keys['ArrowUp'] || keys['z'] || keys['Z']) { 
             newY -= speedPerSecond * deltaTime; 
             this.direction='up'; 
@@ -102,36 +143,12 @@ class Player {
         this.x = Math.max(0, Math.min(this.game.canvas.width - this.width, newX));
         this.y = Math.max(0, Math.min(this.game.canvas.height - this.height, newY));
 
-        // FIX 3 : Fin d'attaque propre
-        if (this.isAttacking) {
-            // Si l'attaque vient de commencer, déclencher l'animation
-            if (!this.hasStartedAttack) {
-                this.currentAnimation = this.animations.attack;
-                this.currentAnimation.reset();
-                this.currentAnimation.play();
-                this.hasStartedAttack = true;
-            }
-            
-            this.attackTimer += deltaTime;
-            this.currentAnimation.update(deltaTime);
-            const attackDuration = this.animations.attack.frames.length * this.animations.attack.frameDuration;
-            if (this.attackTimer >= attackDuration) {
-                this.isAttacking = false;
-                this.hasStartedAttack = false; // RESET PROPRE
-                this.attackTimer = 0;
-                this._damageApplied = false;
-                this.currentAnimation = this.animations.idle;
-                this.currentAnimation.reset();
-                this.currentAnimation.play();
-            }
-            return; // Ne jamais changer d'animation avant la fin
-        }
-
+        // Mise à jour de l'animation courante
         if (this.currentAnimation) {
             this.currentAnimation.update(deltaTime);
         }
 
-        // Sélectionner l'animation selon l'état
+        // Sélection de l'animation selon l'état
         let targetAnimation = null;
         if (!this.isAlive) {
             targetAnimation = this.animations.dead;
@@ -143,46 +160,36 @@ class Player {
             targetAnimation = this.animations.idle;
         }
 
-        // CRITIQUE : Ne pas changer d'animation si on est déjà sur la bonne animation
-        if (!this.isAttacking) {
-            if (!this.isMoving && this.currentAnimation === this.animations.idle) {
-                targetAnimation = this.animations.idle;
-            } else if (this.isMoving && this.currentAnimation === this.animations.run) {
-                targetAnimation = this.animations.run;
-            }
-        }
-
-        // S'assurer qu'on a toujours une animation valide
-        if (!targetAnimation) {
-            targetAnimation = this.animations.idle;
-        }
-
-        // S'assurer que currentAnimation n'est jamais null
-        if (!this.currentAnimation) {
-            this.currentAnimation = this.animations.idle;
-        }
-
-        // Changer d'animation seulement quand c'est NECESSAIRE
-        if (targetAnimation && this.currentAnimation !== targetAnimation) {
-            // Ne JAMAIS interrompre une animation non-loop en cours
-            if (!this.currentAnimation.loop && this.currentAnimation.isPlaying) {
-                // On attend la fin
-            } else {
-                // Changer d'animation de manière atomique
-                this.currentAnimation = targetAnimation;
-                this.currentAnimation.reset();
-                this.currentAnimation.play();
-            }
+        // Changer d'animation si nécessaire
+        if (targetAnimation) {
+            this.switchAnimation(targetAnimation);
         }
     }
 
-    // FIX 1 : Verrou d'entrée d'attaque
     attack() {
-        if (!this.isAttacking && this.isAlive && !this.isBlocking) {
-            this.isAttacking = true;
-            this.hasStartedAttack = false; // IMPORTANT
-            this.attackTimer = 0;
+        // Ne peut pas attaquer si déjà en train d'attaquer
+        if (this.isAttacking || !this.isAlive || this.isBlocking) {
+            return;
         }
+        
+        // Vérifier que l'animation existe
+        if (!this.animations.attack) {
+            return;
+        }
+        
+        console.log('⚔️ Démarrage attaque - Direction:', this.direction);
+        
+        // Démarrer l'attaque
+        this.isAttacking = true;
+        this.attackTimer = 0;
+        this._damageApplied = false;
+        
+        // IMPORTANT : Figer la direction pendant l'attaque
+        this._attackDirection = this.direction;
+        
+        // Forcer le changement vers l'animation d'attaque
+        this.currentAnimation = this.animations.attack;
+        this.animations.attack.play();
     }
 
     block(blocking) { 
@@ -201,55 +208,72 @@ class Player {
     }
 
     render(ctx) {
+        if (!this._renderCallCount) this._renderCallCount = 0;
+        this._renderCallCount++;
+        
+        if (this.isAttacking && this._renderCallCount % 60 === 0) {
+            console.log('📊 Player.render() appelé', this._renderCallCount, 'fois');
+        }
+        
         if (!this.spriteLoaded || !this.spriteSheet || !this.currentAnimation) {
-            ctx.fillStyle = COLORS.PLAYER;
+            // Fallback : rectangle de couleur
+            ctx.fillStyle = COLORS.PLAYER || '#4169E1';
             ctx.fillRect(this.x, this.y, this.width, this.height);
             return;
         }
 
         ctx.save();
-        ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset context
+        // CRITIQUE : Désactiver l'anti-aliasing APRÈS save()
+        ctx.imageSmoothingEnabled = false;
+        ctx.webkitImageSmoothingEnabled = false;
+        ctx.mozImageSmoothingEnabled = false;
+        ctx.msImageSmoothingEnabled = false;
+        ctx.oImageSmoothingEnabled = false;
 
         const frameIndex = this.currentAnimation.getCurrentFrameIndex();
-        const flipX = this.direction === 'left';
+        // Utiliser la direction figée pendant l'attaque
+        const flipX = this.isAttacking ? (this._attackDirection === 'left') : (this.direction === 'left');
 
+        // Sécurité : si frameIndex invalide, utiliser 0
+        let validFrameIndex = frameIndex;
         if (frameIndex === undefined || frameIndex === null || isNaN(frameIndex) || frameIndex < 0) {
-            ctx.fillStyle = COLORS.PLAYER;
-            ctx.fillRect(this.x, this.y, this.width, this.height);
-            ctx.restore();
-            return;
+            validFrameIndex = 0;
         }
 
-        const row = Math.floor(frameIndex / this.spriteSheet.framesPerRow);
-        const col = frameIndex % this.spriteSheet.framesPerRow;
+        const row = Math.floor(validFrameIndex / this.spriteSheet.framesPerRow);
+        const col = validFrameIndex % this.spriteSheet.framesPerRow;
 
         const sourceX = col * this.spriteSheet.frameWidth;
         const sourceY = row * this.spriteSheet.frameHeight;
 
-        if (sourceX < 0 || sourceY < 0 ||
-            sourceX + this.spriteSheet.frameWidth > this.spriteSheet.image.width ||
-            sourceY + this.spriteSheet.frameHeight > this.spriteSheet.image.height) {
-            ctx.fillStyle = COLORS.PLAYER;
-            ctx.fillRect(this.x, this.y, this.width, this.height);
-            ctx.restore();
-            return;
-        }
+        // Vérifier que les coordonnées sont valides
+        const maxSourceX = this.spriteSheet.image.width - this.spriteSheet.frameWidth;
+        const maxSourceY = this.spriteSheet.image.height - this.spriteSheet.frameHeight;
+        
+        const clampedSourceX = Math.max(0, Math.min(sourceX, maxSourceX));
+        const clampedSourceY = Math.max(0, Math.min(sourceY, maxSourceY));
 
+        // Dessiner le sprite avec ou sans flip horizontal
         if (flipX) {
+            // Flip horizontal : translate puis scale
             ctx.translate(this.x + this.width, this.y);
             ctx.scale(-1, 1);
             ctx.drawImage(
                 this.spriteSheet.image,
-                sourceX, sourceY, this.spriteSheet.frameWidth, this.spriteSheet.frameHeight,
+                clampedSourceX, clampedSourceY, 
+                this.spriteSheet.frameWidth, this.spriteSheet.frameHeight,
                 0, 0, this.width, this.height
             );
         } else {
+            // Pas de flip : dessin normal
             ctx.drawImage(
                 this.spriteSheet.image,
-                sourceX, sourceY, this.spriteSheet.frameWidth, this.spriteSheet.frameHeight,
+                clampedSourceX, clampedSourceY,
+                this.spriteSheet.frameWidth, this.spriteSheet.frameHeight,
                 this.x, this.y, this.width, this.height
             );
         }
+        
         ctx.restore();
     }
 
@@ -264,7 +288,6 @@ class Player {
     }
 
     takeDamage(amount) {
-        // Si le joueur bloque, il ne prend pas de dégâts
         if (this.isBlocking) {
             return;
         }
@@ -294,4 +317,3 @@ class Player {
         return false;
     }
 }
-

@@ -20,6 +20,9 @@ class Animation {
     }
 
     reset() {
+        // FIX : Ne PAS toucher à isPlaying dans reset()
+        // reset() ne réinitialise que currentFrame et timer
+        // play() s'occupe de mettre isPlaying à true de manière atomique
         this.currentFrame = 0;
         this.timer = 0;
     }
@@ -30,7 +33,8 @@ class Animation {
         this.timer += deltaTime;
 
         if (this.timer >= this.frameDuration) {
-            this.timer = 0;
+            // FIX : Soustraire au lieu de mettre à 0 pour plus de précision
+            this.timer -= this.frameDuration;
             this.currentFrame++;
 
             if (this.currentFrame >= this.frames.length) {

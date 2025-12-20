@@ -174,6 +174,11 @@ class Phase0_Cinematic {
             if (this.npc.x > this.canvas.width + 50) {
                 console.log('✅ Chat parti, transition vers Phase1_Roguelike');
                 this.isComplete = true;
+                
+                // CRITIQUE : NETTOYER TOUT
+                this.player = null;  // Nettoyer la référence au joueur
+                this.npc = null;     // Nettoyer la référence au NPC
+                
                 this.game.nextPhase();
             }
         }
@@ -186,6 +191,11 @@ class Phase0_Cinematic {
 
 
     render(ctx) {
+        // PROTECTION : Ne rien rendre si la phase est terminée
+        if (this.isComplete) {
+            return;
+        }
+        
         // Nettoyer le canvas en premier
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         
