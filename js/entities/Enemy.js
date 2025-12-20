@@ -8,8 +8,11 @@ class Enemy {
         this.type = type;
         this.config = ENEMY_TYPES[type] || ENEMY_TYPES.WEAK;
         
-        this.width = 32;
-        this.height = 32;
+        // Les sprites du pack sont en 16x16, affichés plus petits que le chevalier
+        this.spriteWidth = 16;  // Largeur réelle du sprite dans la feuille
+        this.spriteHeight = 16; // Hauteur réelle du sprite dans la feuille
+        this.width = 48;        // Largeur d'affichage (réduite encore)
+        this.height = 48;       // Hauteur d'affichage (réduite encore)
         this.speed = this.config.speed;
         this.hp = this.config.hp;
         this.maxHp = this.config.hp;
@@ -32,10 +35,11 @@ class Enemy {
             const img = new Image();
             img.onload = () => {
                 Enemy.spriteSheetImage = img;
+                console.log('✅ Sprite sheet ennemis chargé:', img.width, 'x', img.height);
                 resolve();
             };
             img.onerror = () => {
-                console.error('Erreur chargement sprite ennemis');
+                console.error('❌ Erreur chargement sprite ennemis');
                 reject();
             };
             img.src = 'assets/images/sprites/enemies/roguelikecreatures.png';
@@ -45,8 +49,10 @@ class Enemy {
     async loadSprite() {
         await Enemy.loadSharedSprite();
         if (Enemy.spriteSheetImage) {
-            this.spriteSheet = new SpriteSheet(Enemy.spriteSheetImage, 32, 32);
+            // Le sprite sheet contient des sprites de 16x16 pixels
+            this.spriteSheet = new SpriteSheet(Enemy.spriteSheetImage, 16, 16);
             this.spriteLoaded = true;
+            console.log('✅ SpriteSheet ennemis initialisé avec 16x16');
         }
     }
 
@@ -65,16 +71,14 @@ class Enemy {
                 this.y += (dy / distance) * this.speed;
                 this.direction = dx < 0 ? 'left' : 'right';
             }
-
-            // Attaque au contact
-            if (distance < 50) {
-                this.attack(player);
-            }
+            
+            // Note : Les attaques sont gérées tour à tour dans Phase1_Roguelike.update()
+            // pour éviter que tous les ennemis attaquent en même temps
         }
     }
 
     attack(player) {
-        if (!player.isBlocking) {
+        if (player && player.isAlive && !player.isBlocking) {
             player.takeDamage(this.damage);
         }
     }
@@ -96,12 +100,16 @@ class Enemy {
             return;
         }
 
-        // Calculer la position du sprite dans la feuille (4x4 grid)
+        // Calculer la position du sprite dans la feuille (sprites de 16x16)
+        // Le sprite sheet est organisé en grille, on utilise spriteIndex pour choisir un sprite
         const spriteRow = Math.floor(this.spriteIndex / 4);
         const spriteCol = this.spriteIndex % 4;
-        const sx = spriteCol * 32;
-        const sy = spriteRow * 32;
+        const sx = spriteCol * this.spriteWidth;
+        const sy = spriteRow * this.spriteHeight;
 
+        // Désactiver l'anti-aliasing pour un rendu pixel art net
+        ctx.imageSmoothingEnabled = false;
+        
         const flipX = this.direction === 'left';
 
         if (flipX) {
@@ -110,14 +118,14 @@ class Enemy {
             ctx.scale(-1, 1);
             ctx.drawImage(
                 this.spriteSheet.image,
-                sx, sy, 32, 32,
+                sx, sy, this.spriteWidth, this.spriteHeight,
                 0, 0, this.width, this.height
             );
             ctx.restore();
         } else {
             ctx.drawImage(
                 this.spriteSheet.image,
-                sx, sy, 32, 32,
+                sx, sy, this.spriteWidth, this.spriteHeight,
                 this.x, this.y, this.width, this.height
             );
         }

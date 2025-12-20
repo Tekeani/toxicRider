@@ -27,10 +27,16 @@ class Phase1_Roguelike {
             "C'est toi le problème !",
             "Toi ta gueule !"
         ];
+        this.waveStartTimer = 0; // Timer pour le compte à rebours de la vague
+        this.waveStartDelay = 5; // 5 secondes d'attente
+        this.enemyAttackCooldown = 0; // Cooldown global pour attaques des ennemis
+        this.enemyAttackIndex = 0; // Index de l'ennemi qui attaque actuellement
         this._attackPressed = false;
         this._toxicityPressed = false;
         this.upgradeMenuActive = false;
         this.selectedUpgrade = null;
+        this.gameOver = false; // État Game Over
+        this.buttonPressed = false; // État du bouton Rejouer (pour l'animation)
 
         // IMPORTANT : Stocker les handlers pour pouvoir les retirer
         this.keydownHandler = null;
@@ -61,8 +67,10 @@ class Phase1_Roguelike {
         this.player = new Player(width / 2 - 80, height / 2 - 150, this.game);
         console.log('✅ Joueur créé à la position:', this.player.x, this.player.y);
 
-        // Pas de spawn d'ennemis pour le moment
-        // this.spawnWave();
+        // Démarrage du compte à rebours pour la première vague
+        this.waveStartTimer = this.waveStartDelay;
+        console.log('⏰ Démarrage du compte à rebours de la vague ennemie (5 secondes)');
+        
         console.log('✅ Phase1_Roguelike initialisée complètement');
     }
 
@@ -119,6 +127,15 @@ class Phase1_Roguelike {
         // Ajouter les listeners
         document.addEventListener('keydown', this.keydownHandler);
         document.addEventListener('keyup', this.keyupHandler);
+        
+        // Listener pour les clics (pour le bouton Rejouer)
+        this.clickHandler = (e) => {
+            const rect = this.canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            this.handleClick(x, y);
+        };
+        this.canvas.addEventListener('click', this.clickHandler);
     }
 
     // Méthode pour nettoyer les listeners (important pour éviter les fuites mémoire)
@@ -128,6 +145,9 @@ class Phase1_Roguelike {
         }
         if (this.keyupHandler) {
             document.removeEventListener('keyup', this.keyupHandler);
+        }
+        if (this.clickHandler) {
+            this.canvas.removeEventListener('click', this.clickHandler);
         }
     }
 
@@ -139,9 +159,13 @@ class Phase1_Roguelike {
 
         const wave = this.waves[this.currentWave];
         this.enemies = [];
+        
+        // Pour la première vague, utiliser STRONG (30 HP) et count: 3
+        const waveType = this.currentWave === 0 ? 'STRONG' : wave.type;
+        const waveCount = this.currentWave === 0 ? 3 : wave.count;
 
-        for (let i = 0; i < wave.count; i++) {
-            const angle = (Math.PI * 2 * i) / wave.count;
+        for (let i = 0; i < waveCount; i++) {
+            const angle = (Math.PI * 2 * i) / waveCount;
             const distance = 300;
             const x = this.canvas.width / 2 + Math.cos(angle) * distance;
             const y = this.canvas.height / 2 + Math.sin(angle) * distance;
@@ -156,7 +180,9 @@ class Phase1_Roguelike {
 
         const player = this.player;
         const damage = 10; // Coup d'épée = 10 dégâts
-        const range = 60;
+        // Portée de contact : lorsque les hitboxes se touchent (moitié de chaque côté)
+        // Les ennemis et le joueur font 160x160, donc contactRange = 160
+        const contactRange = 160;
 
         // Appliquer les dégâts une seule fois au milieu de l'animation
         if (!player._damageApplied && player.isAttacking) {
@@ -164,11 +190,17 @@ class Phase1_Roguelike {
             if (player.currentAnimation && player.currentAnimation.currentFrame === attackFrame) {
                 this.enemies.forEach(enemy => {
                     if (enemy.isAlive) {
-                        const dx = enemy.x - player.x;
-                        const dy = enemy.y - player.y;
+                        // Calculer la distance au contact (considérer les hitboxes)
+                        const playerCenterX = player.x + player.width / 2;
+                        const playerCenterY = player.y + player.height / 2;
+                        const enemyCenterX = enemy.x + enemy.width / 2;
+                        const enemyCenterY = enemy.y + enemy.height / 2;
+                        const dx = enemyCenterX - playerCenterX;
+                        const dy = enemyCenterY - playerCenterY;
                         const distance = Math.sqrt(dx * dx + dy * dy);
 
-                        if (distance <= range) {
+                        // Attaque au corps à corps : doit être au contact
+                        if (distance <= contactRange) {
                             enemy.takeDamage(damage);
                             this.attackFeedbacks.push({
                                 text: `-${damage}`,
@@ -281,6 +313,21 @@ class Phase1_Roguelike {
             this._updateLogged = true;
         }
         
+        // Si Game Over, ne pas mettre à jour le jeu
+        if (this.gameOver) {
+            return;
+        }
+        
+        // Gérer le compte à rebours de la vague
+        if (this.waveStartTimer > 0) {
+            this.waveStartTimer -= deltaTime;
+            if (this.waveStartTimer <= 0) {
+                // Lancer la première vague
+                this.spawnWave();
+                this.waveStartTimer = 0;
+            }
+        }
+        
         // Pas de menu d'amélioration pour le moment
         // if (this.upgradeMenuActive) return;
 
@@ -288,23 +335,64 @@ class Phase1_Roguelike {
         if (this.player) {
             this.player.update(keys, deltaTime);
             
-            // Pas d'attaque pour le moment
-            // if (this.player.isAttacking) {
-            //     this.playerAttack('strength');
-            // }
+            // Gérer l'attaque du joueur
+            if (this.player.isAttacking) {
+                this.playerAttack('strength');
+            }
         } else {
             console.warn('⚠️ Phase1_Roguelike: player is null');
         }
 
-        // Pas de mise à jour des ennemis pour le moment
-        // this.enemies.forEach(enemy => {
-        //     if (enemy.isAlive) {
-        //         enemy.update();
-        //     }
-        // });
+        // Mise à jour des ennemis (déplacement vers le joueur)
+        this.enemies.forEach(enemy => {
+            if (enemy.isAlive) {
+                enemy.update();
+            }
+        });
+        
+        // Attaque des ennemis (tour à tour, pas tous en même temps)
+        if (this.enemies.length > 0 && this.waveStartTimer <= 0) {
+            this.enemyAttackCooldown -= deltaTime;
+            if (this.enemyAttackCooldown <= 0) {
+                // Trouver le prochain ennemi vivant qui peut attaquer
+                const aliveEnemies = this.enemies.filter(e => e.isAlive);
+                if (aliveEnemies.length > 0) {
+                    const attackingEnemy = aliveEnemies[this.enemyAttackIndex % aliveEnemies.length];
+                    
+                    // Vérifier si l'ennemi est au contact du joueur
+                    if (this.player && this.player.isAlive) {
+                        // Calculer la distance entre les centres des hitboxes
+                        const playerCenterX = this.player.x + this.player.width / 2;
+                        const playerCenterY = this.player.y + this.player.height / 2;
+                        const enemyCenterX = attackingEnemy.x + attackingEnemy.width / 2;
+                        const enemyCenterY = attackingEnemy.y + attackingEnemy.height / 2;
+                        const dx = playerCenterX - enemyCenterX;
+                        const dy = playerCenterY - enemyCenterY;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        // Distance de contact : lorsque les hitboxes se touchent (moitié de chaque côté)
+                        // Joueur: 160x160, Ennemi: 64x64
+                        const contactDistance = (this.player.width / 2 + attackingEnemy.width / 2) * 0.9;
+                        if (distance < contactDistance) {
+                            attackingEnemy.attack(this.player);
+                        }
+                    }
+                    
+                    // Passer au prochain ennemi et ajouter un cooldown
+                    this.enemyAttackIndex = (this.enemyAttackIndex + 1) % aliveEnemies.length;
+                    this.enemyAttackCooldown = 1.5; // 1.5 seconde entre chaque attaque d'ennemi
+                }
+            }
+        }
 
-        // Pas de nettoyage des ennemis pour le moment
-        // this.enemies = this.enemies.filter(e => e.isAlive);
+        // Nettoyage des ennemis morts
+        this.enemies = this.enemies.filter(e => e.isAlive);
+
+        // Vérifier si le joueur est mort
+        if (this.player && !this.player.isAlive && !this.gameOver) {
+            this.gameOver = true;
+            console.log('💀 Game Over - Le joueur est mort');
+        }
 
         // Pas de vérification de vague pour le moment
         // if (this.enemies.length === 0 && !this.allWavesComplete && this.currentWave < this.waves.length) {
@@ -468,13 +556,27 @@ class Phase1_Roguelike {
             drawPixelRockTopDown(rock.x, rock.y, rock.size);
         });
 
-        // 2. Ennemis (désactivés pour le moment)
-        // this.enemies.forEach(enemy => {
-        //     if (enemy.isAlive) {
-        //         enemy.render(ctx);
-        //     }
-        // });
+        // 2. Ennemis
+        this.enemies.forEach(enemy => {
+            if (enemy.isAlive) {
+                enemy.render(ctx);
+            }
+        });
 
+        // 2.5. Message de prévention de vague (compte à rebours)
+        if (this.waveStartTimer > 0) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 32px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const countdown = Math.ceil(this.waveStartTimer);
+            ctx.fillText(`Vague ennemie approche !`, this.canvas.width / 2, this.canvas.height / 2 - 40);
+            ctx.fillText(`${countdown}`, this.canvas.width / 2, this.canvas.height / 2 + 20);
+        }
+        
         // 3. Joueur
         if (this.player && this.player.isAttacking && Math.random() < 0.2) {
             console.log('🎨 Avant player.render():', {
@@ -510,24 +612,104 @@ class Phase1_Roguelike {
             ctx.fillText(insult.text, insult.x, insult.y);
         });
 
-        // 5. Menu d'amélioration (désactivé pour le moment)
-        // if (this.upgradeMenuActive) {
-        //     ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        //     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-        //
-        //     ctx.fillStyle = '#fff';
-        //     ctx.font = '24px Arial';
-        //     ctx.textAlign = 'center';
-        //     ctx.fillText('Choisissez une amélioration:', this.canvas.width / 2, this.canvas.height / 2 - 60);
-        //
-        //     ctx.font = '18px Arial';
-        //     ctx.fillText('1 - Force (+10 dégâts)', this.canvas.width / 2, this.canvas.height / 2 - 20);
-        //     ctx.fillText('2 - Toxicité (+10 TP max)', this.canvas.width / 2, this.canvas.height / 2 + 10);
-        //     ctx.fillText('3 - Endurance (+10 HP max)', this.canvas.width / 2, this.canvas.height / 2 + 40);
-        // }
+        // 6. Écran Game Over (dessiné en dernier pour être au-dessus de tout)
+        if (this.gameOver) {
+            // Fond semi-transparent
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            
+            // Texte "GAME OVER"
+            ctx.fillStyle = '#ff0000';
+            ctx.font = 'bold 64px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('GAME OVER', this.canvas.width / 2, this.canvas.height / 2 - 100);
+            
+            // Zone pour le bouton "Rejouer"
+            const buttonWidth = 200;
+            const buttonHeight = 50;
+            const buttonX = this.canvas.width / 2 - buttonWidth / 2;
+            let buttonY = this.canvas.height / 2 + 50;
+            const pressOffset = this.buttonPressed ? 3 : 0; // Décalage quand enfoncé
+            
+            // Ajuster la position si le bouton est pressé
+            buttonY += pressOffset;
+            
+            // Fond du bouton (plus sombre si pressé)
+            ctx.fillStyle = this.buttonPressed ? '#222222' : '#333333';
+            ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+            
+            // Bordure du bouton
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
+            
+            // Texte du bouton (centré verticalement et horizontalement)
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('Rejouer', this.canvas.width / 2, buttonY + buttonHeight / 2);
+        }
         } finally {
             // TOUJOURS remettre à false
             this._isCurrentlyRendering = false;
+        }
+    }
+    
+    // Méthode pour relancer la partie (depuis le début de la vague)
+    restartWave() {
+        console.log('🔄 Relance de la vague');
+        
+        // Réinitialiser l'état Game Over et le bouton
+        this.gameOver = false;
+        this.buttonPressed = false;
+        
+        // Réinitialiser les données du joueur
+        this.game.playerData.hp = PLAYER_CONFIG.INITIAL_HP;
+        this.game.playerData.maxHp = PLAYER_CONFIG.INITIAL_HP;
+        this.game.playerData.mana = PLAYER_CONFIG.INITIAL_MANA;
+        this.game.playerData.maxMana = PLAYER_CONFIG.INITIAL_MANA;
+        
+        // Réinitialiser la vague actuelle
+        this.currentWave = 0;
+        this.enemies = [];
+        this.attackFeedbacks = [];
+        this.insults = [];
+        
+        // Repositionner le joueur
+        const width = this.canvas.width;
+        const height = this.canvas.height;
+        if (this.player) {
+            this.player.x = width / 2 - 80;
+            this.player.y = height / 2 - 150;
+            this.player.isAlive = true;
+        }
+        
+        // Redémarrer le compte à rebours de la vague
+        this.waveStartTimer = this.waveStartDelay;
+    }
+    
+    // Méthode pour gérer les clics (pour le bouton Rejouer)
+    handleClick(x, y) {
+        if (!this.gameOver) return;
+        
+        const buttonWidth = 200;
+        const buttonHeight = 50;
+        const buttonX = this.canvas.width / 2 - buttonWidth / 2;
+        const buttonY = this.canvas.height / 2 + 50;
+        
+        // Vérifier si le clic est sur le bouton
+        if (x >= buttonX && x <= buttonX + buttonWidth && 
+            y >= buttonY && y <= buttonY + buttonHeight) {
+            // Animation d'enfoncement
+            this.buttonPressed = true;
+            
+            // Attendre un peu pour l'effet visuel, puis relancer
+            setTimeout(() => {
+                this.buttonPressed = false;
+                this.restartWave();
+            }, 150); // 150ms d'animation
         }
     }
 }
