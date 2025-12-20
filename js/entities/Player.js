@@ -140,8 +140,14 @@ class Player {
             this.isMoving=true; 
         }
 
+        // Limites pour empêcher de sortir de l'écran
+        // Gauche/Droite : 0 à canvas.width - width
         this.x = Math.max(0, Math.min(this.game.canvas.width - this.width, newX));
-        this.y = Math.max(0, Math.min(this.game.canvas.height - this.height, newY));
+        // Haut/Bas : 0 à hauteur visible réelle - height (barrière en bas)
+        // Le canvas.height (768) est plus grand que l'écran visible réel, utiliser ~70% pour correspondre à l'écran visible
+        const visibleHeight = Math.floor(this.game.canvas.height * 0.70);
+        const maxY = visibleHeight - this.height;
+        this.y = Math.max(0, Math.min(maxY, newY));
 
         // Mise à jour de l'animation courante
         if (this.currentAnimation) {

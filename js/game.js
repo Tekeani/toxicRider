@@ -155,15 +155,25 @@ class Game {
     updateUI() {
         const hpBar = document.getElementById('hp-bar');
         const tpBar = document.getElementById('tp-bar');
+        const hpText = document.getElementById('hp-text');
+        const tpText = document.getElementById('tp-text');
 
         if (hpBar) {
             const hpPercent = (this.playerData.hp / this.playerData.maxHp) * 100;
             hpBar.style.width = `${hpPercent}%`;
         }
 
+        if (hpText) {
+            hpText.textContent = `${Math.floor(this.playerData.hp)}/${Math.floor(this.playerData.maxHp)}`;
+        }
+
         if (tpBar) {
             const tpPercent = (this.playerData.mana / this.playerData.maxMana) * 100;
             tpBar.style.width = `${tpPercent}%`;
+        }
+
+        if (tpText) {
+            tpText.textContent = `${Math.floor(this.playerData.mana)}/${Math.floor(this.playerData.maxMana)}`;
         }
     }
 }

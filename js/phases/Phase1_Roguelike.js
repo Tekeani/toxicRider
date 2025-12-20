@@ -15,6 +15,18 @@ class Phase1_Roguelike {
         this.tileMap = null;
         this.tilesLoaded = false;
         this.attackFeedbacks = [];
+        this.insults = []; // Système d'insultes
+        this.insultList = [
+            "T'as vu tes bras ?!",
+            "Et dis pas merci !",
+            "Go kill yourself !",
+            "Retourne chez toi si t'es pas content !",
+            "Encore un a%@b# !!!",
+            "T'es pas la chips la plus croustillante du paquet...",
+            "Mais concentrez-vous bande de noobs !",
+            "C'est toi le problème !",
+            "Toi ta gueule !"
+        ];
         this._attackPressed = false;
         this._toxicityPressed = false;
         this.upgradeMenuActive = false;
@@ -71,7 +83,7 @@ class Phase1_Roguelike {
                 return; // Sortir immédiatement
             }
 
-            if ((e.key === 'r' || e.key === 'R')) {
+            if ((e.key === 'a' || e.key === 'A' || e.key === '!')) {
                 e.preventDefault();
                 
                 if (!this._toxicityPressed) {
@@ -99,7 +111,7 @@ class Phase1_Roguelike {
                 this._attackPressed = false;
             }
 
-            if (e.key === 'r' || e.key === 'R') {
+            if (e.key === 'a' || e.key === 'A' || e.key === '!') {
                 this._toxicityPressed = false;
             }
         };
@@ -143,8 +155,8 @@ class Phase1_Roguelike {
         if (!this.player || !this.player.isAttacking) return;
 
         const player = this.player;
-        const damage = type === 'strength' ? player.game.playerData.strength : 30;
-        const range = type === 'strength' ? 60 : 150;
+        const damage = 10; // Coup d'épée = 10 dégâts
+        const range = 60;
 
         // Appliquer les dégâts une seule fois au milieu de l'animation
         if (!player._damageApplied && player.isAttacking) {
@@ -176,9 +188,51 @@ class Phase1_Roguelike {
     useToxicity() {
         if (this.player && this.player.useToxicity()) {
             const player = this.player;
-            const damage = 30;
+            const damage = 30; // Insulte = 30 dégâts
             const range = 150;
+            
+            // Choisir une insulte aléatoire
+            const randomInsult = this.insultList[Math.floor(Math.random() * this.insultList.length)];
+            
+            // Trouver l'ennemi le plus proche pour orienter l'insulte
+            let closestEnemy = null;
+            let closestDistance = range;
+            
+            this.enemies.forEach(enemy => {
+                if (enemy.isAlive) {
+                    const dx = enemy.x - player.x;
+                    const dy = enemy.y - player.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance <= range && distance < closestDistance) {
+                        closestDistance = distance;
+                        closestEnemy = enemy;
+                    }
+                }
+            });
+            
+            // Calculer la direction vers l'ennemi le plus proche (ou droite par défaut)
+            let targetX = player.x + 100;
+            let targetY = player.y;
+            if (closestEnemy) {
+                targetX = closestEnemy.x + closestEnemy.width / 2;
+                targetY = closestEnemy.y + closestEnemy.height / 2;
+            }
+            
+            // Créer l'insulte qui apparaît au-dessus du joueur
+            this.insults.push({
+                text: randomInsult,
+                startX: player.x + player.width / 2,
+                startY: player.y - 30,
+                targetX: targetX,
+                targetY: targetY,
+                x: player.x + player.width / 2,
+                y: player.y - 30,
+                timer: 90, // Durée d'affichage
+                progress: 0 // Progression vers la cible (0 à 1)
+            });
 
+            // Appliquer les dégâts à tous les ennemis à portée
             this.enemies.forEach(enemy => {
                 if (enemy.isAlive) {
                     const dx = enemy.x - player.x;
@@ -264,12 +318,26 @@ class Phase1_Roguelike {
         //     }, 1000);
         // }
 
-        // Pas de feedbacks d'attaque pour le moment
-        // this.attackFeedbacks = this.attackFeedbacks.filter(feedback => {
-        //     feedback.timer--;
-        //     feedback.y -= 1;
-        //     return feedback.timer > 0;
-        // });
+        // Mise à jour des feedbacks d'attaque
+        this.attackFeedbacks = this.attackFeedbacks.filter(feedback => {
+            feedback.timer--;
+            feedback.y -= 1;
+            return feedback.timer > 0;
+        });
+        
+        // Mise à jour des insultes (se déplacent vers la cible)
+        this.insults = this.insults.filter(insult => {
+            insult.timer--;
+            insult.progress = Math.min(1, insult.progress + 0.02); // Avance vers la cible
+            
+            // Interpolation entre la position de départ et la cible
+            const dx = insult.targetX - insult.startX;
+            const dy = insult.targetY - insult.startY;
+            insult.x = insult.startX + dx * insult.progress;
+            insult.y = insult.startY + dy * insult.progress;
+            
+            return insult.timer > 0;
+        });
 
         // Vérifier si le joueur est mort
         if (this.player && !this.player.isAlive) {
@@ -420,13 +488,27 @@ class Phase1_Roguelike {
             this.player.render(ctx);
         }
 
-        // 4. Feedbacks (désactivés pour le moment)
-        // this.attackFeedbacks.forEach(feedback => {
-        //     ctx.fillStyle = feedback.color;
-        //     ctx.font = '16px Courier New';
-        //     ctx.textAlign = 'center';
-        //     ctx.fillText(feedback.text, feedback.x, feedback.y);
-        // });
+        // 4. Feedbacks de dégâts
+        this.attackFeedbacks.forEach(feedback => {
+            ctx.fillStyle = feedback.color;
+            ctx.font = '16px Courier New';
+            ctx.textAlign = 'center';
+            ctx.fillText(feedback.text, feedback.x, feedback.y);
+        });
+        
+        // 5. Insultes (affichées au-dessus du joueur, direction ennemis)
+        ctx.font = 'bold 18px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        this.insults.forEach(insult => {
+            // Ombre du texte pour la lisibilité
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillText(insult.text, insult.x + 2, insult.y + 2);
+            
+            // Texte principal (jaune/orange pour les insultes, plus gros et épais)
+            ctx.fillStyle = '#ffaa00';
+            ctx.fillText(insult.text, insult.x, insult.y);
+        });
 
         // 5. Menu d'amélioration (désactivé pour le moment)
         // if (this.upgradeMenuActive) {

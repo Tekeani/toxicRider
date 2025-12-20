@@ -1,7 +1,7 @@
 // Configuration du joueur
 const PLAYER_CONFIG = {
     SPEED: 3,
-    INITIAL_HP: 60,
+    INITIAL_HP: 50,
     INITIAL_MANA: 30,
     INITIAL_TOXICITY: 30,
     INITIAL_STRENGTH: 10,
