@@ -835,27 +835,44 @@ class Phase1_Roguelike {
         }
     }
     
-    // Méthode pour relancer la partie (depuis le début de la vague)
+    // Méthode pour relancer la partie (depuis le début de la première vague)
     restartWave() {
-        console.log('🔄 Relance de la vague');
+        console.log('🔄 Relance du jeu depuis le début (vague 1)');
         
         // Réinitialiser l'état Game Over et le bouton
         this.gameOver = false;
         this.buttonPressed = false;
         this.upgradeMenuActive = false;
         this.upgradeButtonPressed = { hp: false, toxicity: false };
+        this.allWavesComplete = false;
         
-        // Réinitialiser les données du joueur
+        // Réinitialiser les données du joueur dans playerData
         this.game.playerData.hp = PLAYER_CONFIG.INITIAL_HP;
         this.game.playerData.maxHp = PLAYER_CONFIG.INITIAL_HP;
         this.game.playerData.mana = PLAYER_CONFIG.INITIAL_MANA;
         this.game.playerData.maxMana = PLAYER_CONFIG.INITIAL_MANA;
         
-        // Réinitialiser la vague actuelle
+        // Réinitialiser les données du joueur dans l'instance Player
+        if (this.player) {
+            this.player.isAlive = true;
+            this.player.mana = PLAYER_CONFIG.INITIAL_MANA;
+            this.player.maxMana = PLAYER_CONFIG.INITIAL_MANA;
+            this.player.isAttacking = false;
+            this.player.isBlocking = false;
+            this.player.isTakingDamage = false;
+            this.player.attackTimer = 0;
+            this.player.damageTimer = 0;
+            this.player._damageApplied = false;
+            this.player.toxicityCooldown = 0;
+        }
+        
+        // Réinitialiser à la première vague (vague 0)
         this.currentWave = 0;
         this.enemies = [];
         this.attackFeedbacks = [];
         this.insults = [];
+        this.enemyAttackIndex = 0;
+        this.enemyAttackCooldown = 0;
         
         // Repositionner le joueur
         const width = this.canvas.width;
@@ -863,11 +880,11 @@ class Phase1_Roguelike {
         if (this.player) {
             this.player.x = width / 2 - 80;
             this.player.y = height / 2 - 150;
-            this.player.isAlive = true;
         }
         
-        // Redémarrer le compte à rebours de la vague
+        // Redémarrer le compte à rebours de la vague 1
         this.waveStartTimer = this.waveStartDelay;
+        console.log('✅ Jeu réinitialisé, démarrage de la vague 1 dans 5 secondes');
     }
     
     // Méthode pour gérer les clics (pour le bouton Rejouer et les boutons d'amélioration)
