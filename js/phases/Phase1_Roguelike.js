@@ -765,10 +765,14 @@ class Phase1_Roguelike {
             const startX = this.canvas.width / 2 - totalWidth / 2;
             const buttonY = this.canvas.height / 2 + 20;
             
-            // Bouton +10 HP
+            // Bouton +10 HP (rouge comme la barre de santé)
             const hpButtonX = startX;
             const hpPressOffset = this.upgradeButtonPressed.hp ? 3 : 0;
-            ctx.fillStyle = this.upgradeButtonPressed.hp ? '#228822' : '#33aa33';
+            // Utiliser les mêmes couleurs que la barre HP : gradient de #ff4444 à #ff6666
+            const hpGradient = ctx.createLinearGradient(hpButtonX, buttonY + hpPressOffset, hpButtonX + buttonWidth, buttonY + hpPressOffset);
+            hpGradient.addColorStop(0, this.upgradeButtonPressed.hp ? '#cc3333' : '#ff4444');
+            hpGradient.addColorStop(1, this.upgradeButtonPressed.hp ? '#aa2222' : '#ff6666');
+            ctx.fillStyle = hpGradient;
             ctx.fillRect(hpButtonX, buttonY + hpPressOffset, buttonWidth, buttonHeight);
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 2;
@@ -778,10 +782,14 @@ class Phase1_Roguelike {
             ctx.textAlign = 'center';
             ctx.fillText('+10 Santé', hpButtonX + buttonWidth / 2, buttonY + hpPressOffset + buttonHeight / 2);
             
-            // Bouton +10 Toxicité
+            // Bouton +10 Toxicité (vert comme la barre de toxicité)
             const toxicityButtonX = startX + buttonWidth + buttonSpacing;
             const toxicityPressOffset = this.upgradeButtonPressed.toxicity ? 3 : 0;
-            ctx.fillStyle = this.upgradeButtonPressed.toxicity ? '#882288' : '#aa33aa';
+            // Utiliser les mêmes couleurs que la barre TP : gradient de #44ff44 à #66ff66
+            const toxicityGradient = ctx.createLinearGradient(toxicityButtonX, buttonY + toxicityPressOffset, toxicityButtonX + buttonWidth, buttonY + toxicityPressOffset);
+            toxicityGradient.addColorStop(0, this.upgradeButtonPressed.toxicity ? '#33cc33' : '#44ff44');
+            toxicityGradient.addColorStop(1, this.upgradeButtonPressed.toxicity ? '#22aa22' : '#66ff66');
+            ctx.fillStyle = toxicityGradient;
             ctx.fillRect(toxicityButtonX, buttonY + toxicityPressOffset, buttonWidth, buttonHeight);
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 2;

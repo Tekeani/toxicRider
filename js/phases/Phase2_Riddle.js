@@ -161,8 +161,15 @@ class Phase2_Riddle {
     setupInput() {
         this.keydownHandler = (e) => {
             // Bloquer l'insulte/sort (touches a ou !) dans Phase2_Riddle
+            // Utiliser stopPropagation() pour empêcher que d'autres handlers ne soient appelés
             if (e.key === 'a' || e.key === 'A' || e.key === '!') {
                 e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                // S'assurer que les touches ne sont pas enregistrées dans le système global
+                if (this.game && this.game.keys) {
+                    this.game.keys[e.key] = false;
+                }
                 return; // Bloquer complètement l'insulte dans cette phase
             }
             
@@ -259,14 +266,22 @@ class Phase2_Riddle {
         };
         
         this.keyupHandler = (e) => {
+            // Bloquer aussi dans keyup pour éviter tout problème
+            if (e.key === 'a' || e.key === 'A' || e.key === '!') {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            
             // Réinitialiser le flag quand la touche est relâchée
             if (e.key === 'Enter' || e.key === 'e' || e.key === 'E') {
                 this._interactPressed = false;
             }
         };
         
-        document.addEventListener('keydown', this.keydownHandler);
-        document.addEventListener('keyup', this.keyupHandler);
+        // Ajouter les listeners avec capture phase pour être sûr d'intercepter avant les autres
+        document.addEventListener('keydown', this.keydownHandler, true);
+        document.addEventListener('keyup', this.keyupHandler, true);
         
         // Gestion des clics pour le bouton Rejouer
         this.clickHandler = (e) => {
@@ -379,6 +394,14 @@ class Phase2_Riddle {
     }
     
     update(deltaTime, keys) {
+        // BLOQUER L'INSULTE : Forcer les touches a et ! à false dans le système global
+        // Cela empêche toute utilisation de l'insulte même si elle était déjà enregistrée
+        if (this.game && this.game.keys) {
+            this.game.keys['a'] = false;
+            this.game.keys['A'] = false;
+            this.game.keys['!'] = false;
+        }
+        
         // Gérer la transition
         if (this.transitionActive && !this.transitionComplete) {
             this.transitionArrowBlinkTimer += deltaTime;
@@ -488,7 +511,7 @@ class Phase2_Riddle {
             }
         }
         
-        // Mise à jour du PNJ
+        // Mise à jour du PNJ (sheepman)
         if (this.npc) {
             this.npc.update(deltaTime);
         }
