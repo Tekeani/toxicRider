@@ -56,7 +56,8 @@ class Game {
         // Initialiser les phases
         this.phases = [
             new Phase0_Cinematic(this),
-            new Phase1_Roguelike(this)
+            new Phase1_Roguelike(this),
+            new Phase2_Riddle(this)
         ];
 
         // Initialiser la première phase

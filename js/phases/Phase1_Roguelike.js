@@ -516,10 +516,12 @@ class Phase1_Roguelike {
         // Nettoyage des ennemis morts
         this.enemies = this.enemies.filter(e => e.isAlive);
 
-        // Vérifier si le joueur est mort
+        // Vérifier si le joueur est mort ET que l'animation de mort est terminée
         if (this.player && !this.player.isAlive && !this.gameOver) {
-            this.gameOver = true;
-            console.log('💀 Game Over - Le joueur est mort');
+            if (this.player.isDeathAnimationComplete()) {
+                this.gameOver = true;
+                console.log('💀 Game Over - Le joueur est mort et l\'animation de mort est terminée');
+            }
         }
 
         // Vérifier si tous les ennemis sont morts et afficher le menu d'amélioration

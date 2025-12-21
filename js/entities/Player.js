@@ -22,6 +22,8 @@ class Player {
         this.attackTimer = 0;
         this._damageApplied = false;
         this.isBlocking = false;
+        this.isTakingDamage = false;
+        this.damageTimer = 0;
 
         this.mana = game.playerData.mana || 30;
         this.maxMana = game.playerData.maxMana || 30;
@@ -61,7 +63,10 @@ class Player {
         // Doc dit frames 19-24 = 6 frames, donc indices 32-37 dans un sprite à 8 colonnes
         this.animations.attack = new Animation(this.spriteSheet, [32,33,34,35,36,37], 0.12, false);
         this.animations.block = new Animation(this.spriteSheet, [50,51,52,53,54,55,56,57,58,59], 0.12, true);
-        this.animations.dead = new Animation(this.spriteSheet, [40,41,42,43,44,45,46,47,48,49], 0.15, false);
+        // Row 6 = taking damage = frame 25 (1-based) = index 40 (0-based) avec 8 colonnes par row
+        this.animations.hurt = new Animation(this.spriteSheet, [40], 0.3, false);
+        // Row 7 = dead (26-32 selon doc) = indices 48-54 (0-based) avec 8 colonnes par row
+        this.animations.dead = new Animation(this.spriteSheet, [48,49,50,51,52,53,54], 0.15, false);
 
         this.currentAnimation = this.animations.idle;
         this.currentAnimation.play();
@@ -90,6 +95,43 @@ class Player {
         }
         
         if (this.toxicityCooldown > 0) this.toxicityCooldown -= deltaTime * 60;
+
+        // ========== GESTION DE L'ANIMATION DE MORT EN PRIORITÉ ABSOLUE ==========
+        if (!this.isAlive) {
+            // Mettre à jour l'animation de mort
+            if (this.currentAnimation && this.animations.dead) {
+                this.currentAnimation.update(deltaTime);
+                // Forcer l'animation de mort si ce n'est pas déjà le cas
+                if (this.currentAnimation !== this.animations.dead) {
+                    this.currentAnimation = this.animations.dead;
+                    this.animations.dead.play();
+                }
+            }
+            // Ne rien faire d'autre si le joueur est mort
+            return;
+        }
+        // =====================================================
+
+        // ========== GESTION DE L'ANIMATION DE BLESSURE EN PRIORITÉ ==========
+        if (this.isTakingDamage) {
+            this.damageTimer += deltaTime;
+            
+            // Mettre à jour l'animation de blessure
+            if (this.currentAnimation) {
+                this.currentAnimation.update(deltaTime);
+            }
+            
+            // Durée de l'animation de blessure : 0.3 secondes
+            const damageDuration = 0.3;
+            if (this.damageTimer >= damageDuration) {
+                this.damageTimer = 0;
+                this.isTakingDamage = false;
+            }
+            
+            // Pendant la blessure, ne pas gérer le mouvement ni les autres animations
+            return;
+        }
+        // =====================================================
 
         // ========== GESTION DE L'ATTAQUE EN PRIORITÉ ==========
         if (this.isAttacking) {
@@ -156,21 +198,22 @@ class Player {
             this.currentAnimation.update(deltaTime);
         }
 
-        // Sélection de l'animation selon l'état
-        let targetAnimation = null;
-        if (!this.isAlive) {
-            targetAnimation = this.animations.dead;
-        } else if (this.isBlocking) {
-            targetAnimation = this.animations.block;
-        } else if (this.isMoving) {
-            targetAnimation = this.animations.run;
-        } else {
-            targetAnimation = this.animations.idle;
-        }
+        // Sélection de l'animation selon l'état (sauf si en train de prendre des dégâts)
+        // Note: La mort est déjà gérée en priorité absolue au début de update()
+        if (!this.isTakingDamage) {
+            let targetAnimation = null;
+            if (this.isBlocking) {
+                targetAnimation = this.animations.block;
+            } else if (this.isMoving) {
+                targetAnimation = this.animations.run;
+            } else {
+                targetAnimation = this.animations.idle;
+            }
 
-        // Changer d'animation si nécessaire
-        if (targetAnimation) {
-            this.switchAnimation(targetAnimation);
+            // Changer d'animation si nécessaire
+            if (targetAnimation) {
+                this.switchAnimation(targetAnimation);
+            }
         }
     }
 
@@ -303,6 +346,41 @@ class Player {
         this.game.playerData.hp = Math.max(0, this.game.playerData.hp - amount);
         if (this.game.playerData.hp <= 0) {
             this.isAlive = false;
+            // Déclencher l'animation de mort
+            if (this.animations.dead) {
+                // Interrompre toute autre action
+                if (this.isAttacking) {
+                    this.isAttacking = false;
+                    this.attackTimer = 0;
+                    this._damageApplied = false;
+                }
+                if (this.isTakingDamage) {
+                    this.isTakingDamage = false;
+                    this.damageTimer = 0;
+                }
+                // Forcer le changement vers l'animation de mort
+                this.currentAnimation = this.animations.dead;
+                this.animations.dead.reset();
+                this.animations.dead.play();
+            }
+            return; // Ne pas continuer si le joueur est mort
+        }
+        
+        // Déclencher l'animation de blessure si le joueur est toujours vivant
+        if (this.isAlive && this.animations.hurt) {
+            // Interrompre l'attaque si elle était en cours
+            if (this.isAttacking) {
+                this.isAttacking = false;
+                this.attackTimer = 0;
+                this._damageApplied = false;
+            }
+            
+            this.isTakingDamage = true;
+            this.damageTimer = 0;
+            // Forcer le changement vers l'animation de blessure (bypass switchAnimation pour forcer l'interruption)
+            this.currentAnimation = this.animations.hurt;
+            this.animations.hurt.reset();
+            this.animations.hurt.play();
         }
     }
 
@@ -323,5 +401,17 @@ class Player {
             return false;
         }
         return false;
+    }
+
+    // Vérifier si l'animation de mort est terminée
+    isDeathAnimationComplete() {
+        if (this.isAlive) {
+            return false; // Le joueur est vivant, l'animation de mort n'est pas terminée (car pas commencée)
+        }
+        if (!this.animations.dead) {
+            return true; // Pas d'animation de mort, considérer comme terminée
+        }
+        // L'animation de mort est terminée si elle a fini de jouer (non-loop et isPlaying = false)
+        return this.animations.dead.isFinished();
     }
 }
