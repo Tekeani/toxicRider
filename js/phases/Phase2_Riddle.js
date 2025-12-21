@@ -160,6 +160,12 @@ class Phase2_Riddle {
     
     setupInput() {
         this.keydownHandler = (e) => {
+            // Bloquer l'insulte/sort (touches a ou !) dans Phase2_Riddle
+            if (e.key === 'a' || e.key === 'A' || e.key === '!') {
+                e.preventDefault();
+                return; // Bloquer complètement l'insulte dans cette phase
+            }
+            
             // Gérer la transition
             if (this.transitionActive && !this.transitionComplete && this.waitingForInput) {
                 if (e.key === 'Enter' || e.key === 'e' || e.key === 'E') {
