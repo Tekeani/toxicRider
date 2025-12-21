@@ -9,9 +9,42 @@ class Phase3_Boss {
         this.bossHp = 50;
         this.bossMaxHp = 50;
         this.currentTurn = 0; // Tour actuel (0-4, 5 questions max)
-        this.waitingForPlayerResponse = false;
         this.selectedAnswerIndex = 0;
-        this.battleState = 'boss_talk'; // 'boss_talk' | 'player_choice' | 'result' | 'game_over' | 'victory'
+        this.battleState = 'intro_dialogue'; // 'intro_dialogue' | 'boss_talk' | 'player_choice' | 'result' | 'game_over' | 'victory_dialogue' | 'victory_free' | 'defeat_dialogue'
+        
+        // Sprites
+        this.bossSprite = null;
+        this.bikeSprite = null;
+        this.bossSpriteLoaded = false;
+        this.bikeSpriteLoaded = false;
+        
+        // Position de la cage et de la moto
+        this.cageX = this.canvas.width / 2 - 100;
+        this.cageY = this.canvas.height / 2 - 100;
+        this.cageWidth = 200;
+        this.cageHeight = 150;
+        this.cageVisible = true;
+        
+        // Dialogue d'introduction
+        this.introDialogueLines = [
+            "Je suis la puissante Amar ! Tu ne pourras pas vaincre mon amour pour toi !"
+        ];
+        this.introDialogueTimer = 0;
+        this.introDialogueComplete = false;
+        this.waitingForDialogueInput = false;
+        this.dialogueArrowBlinkTimer = 0;
+        
+        // Dialogue de victoire
+        this.victoryDialogueLines = [
+            "Aaaaargh ! Je suis vaincue ! Je ne peux plus m'interposer entre toi et ton véritable amour ! *s'effondre*"
+        ];
+        this.victoryDialogueComplete = false;
+        
+        // Dialogue de défaite
+        this.defeatDialogueLines = [
+            "HAHAHA ! Je le savais ! Tu m'aimes donc ! Allons nous marier !"
+        ];
+        this.defeatDialogueComplete = false;
         
         // Phrases du boss et réponses
         this.bossPhrases = [
@@ -63,32 +96,126 @@ class Phase3_Boss {
         this.clickHandler = null;
         this._interactPressed = false;
         this.buttonPressed = false;
+        this.bossTalkTimer = 0;
+        this.heartPulseTime = 0;
+        this.resultMessage = null;
     }
     
     async init() {
         console.log('🎮 Phase3_Boss.init() appelé');
         
-        // Initialiser le joueur (utiliser les HP actuels du joueur)
-        this.player = new Player(0, 0, this.game); // Position non utilisée pour le rendu
+        // Position initiale du joueur (visible, au centre bas)
+        const playerX = this.canvas.width / 2 - 32;
+        const playerY = this.canvas.height - 150;
+        this.player = new Player(playerX, playerY, this.game);
         
         // Réinitialiser l'état du combat
         this.bossHp = 50;
         this.bossMaxHp = 50;
         this.currentTurn = 0;
-        this.waitingForPlayerResponse = false;
         this.selectedAnswerIndex = 0;
-        this.battleState = 'boss_talk';
-        this.bossTalkTimer = 0; // Timer pour transition automatique
-        this.heartPulseTime = 0; // Timer pour pulsation du cœur
+        this.battleState = 'intro_dialogue';
+        this.bossTalkTimer = 0;
+        this.heartPulseTime = 0;
         this.resultMessage = null;
+        this.introDialogueComplete = false;
+        this.victoryDialogueComplete = false;
+        this.defeatDialogueComplete = false;
+        this.cageVisible = true;
+        this.waitingForDialogueInput = false;
+        this.dialogueArrowBlinkTimer = 0;
+        
+        // Charger les sprites
+        await this.loadSprites();
         
         this.setupInput();
         
-        console.log('✅ Phase3_Boss initialisée (combat style Pokémon)');
+        console.log('✅ Phase3_Boss initialisée (combat style donjon)');
+    }
+    
+    async loadSprites() {
+        // Charger le sprite du boss (cœur)
+        return new Promise((resolve) => {
+            const bossImg = new Image();
+            bossImg.onload = () => {
+                this.bossSprite = bossImg;
+                this.bossSpriteLoaded = true;
+                console.log('✅ Sprite boss (cœur) chargé');
+                
+                // Charger le sprite de la moto
+                const bikeImg = new Image();
+                bikeImg.onload = () => {
+                    this.bikeSprite = bikeImg;
+                    this.bikeSpriteLoaded = true;
+                    console.log('✅ Sprite moto chargé');
+                    resolve();
+                };
+                bikeImg.onerror = () => {
+                    console.warn('⚠️ Impossible de charger le sprite de la moto');
+                    this.bikeSpriteLoaded = false;
+                    resolve();
+                };
+                bikeImg.src = 'assets/images/sprites/vehicles/spr_bike1_0.png';
+            };
+            bossImg.onerror = () => {
+                console.warn('⚠️ Impossible de charger le sprite du boss');
+                this.bossSpriteLoaded = false;
+                resolve();
+            };
+            bossImg.src = 'assets/images/sprites/boss/Heart.png';
+        });
     }
     
     setupInput() {
         this.keydownHandler = (e) => {
+            // Gérer le dialogue d'introduction
+            if (this.battleState === 'intro_dialogue' && this.waitingForDialogueInput && (e.key === 'Enter' || e.key === 'e' || e.key === 'E') && !this._interactPressed) {
+                e.preventDefault();
+                this._interactPressed = true;
+                this.introDialogueComplete = true;
+                this.waitingForDialogueInput = false;
+                this.battleState = 'boss_talk';
+                this.bossTalkTimer = 0;
+                return;
+            }
+            
+            // Gérer le dialogue de victoire
+            if (this.battleState === 'victory_dialogue' && this.waitingForDialogueInput && (e.key === 'Enter' || e.key === 'e' || e.key === 'E') && !this._interactPressed) {
+                e.preventDefault();
+                this._interactPressed = true;
+                this.victoryDialogueComplete = true;
+                this.waitingForDialogueInput = false;
+                this.cageVisible = false;
+                this.battleState = 'victory_free';
+                return;
+            }
+            
+            // Gérer le dialogue de défaite
+            if (this.battleState === 'defeat_dialogue' && this.waitingForDialogueInput && (e.key === 'Enter' || e.key === 'e' || e.key === 'E') && !this._interactPressed) {
+                e.preventDefault();
+                this._interactPressed = true;
+                this.defeatDialogueComplete = true;
+                this.waitingForDialogueInput = false;
+                this.battleState = 'game_over';
+                return;
+            }
+            
+            // Gérer l'interaction avec la moto en mode libre
+            if (this.battleState === 'victory_free' && (e.key === 'Enter' || e.key === 'e' || e.key === 'E') && !this._interactPressed) {
+                e.preventDefault();
+                this._interactPressed = true;
+                // Vérifier si le joueur est proche de la moto
+                const bikeX = this.cageX + this.cageWidth / 2;
+                const bikeY = this.cageY + this.cageHeight / 2;
+                const distance = Math.sqrt(Math.pow(this.player.x + this.player.width/2 - bikeX, 2) + Math.pow(this.player.y + this.player.height/2 - bikeY, 2));
+                if (distance < 100) {
+                    // Passer à la phase suivante (écran noir)
+                    console.log('✅ Interaction avec la moto, passage à la phase suivante');
+                    this.game.nextPhase(); // Cette méthode passera à la phase suivante ou affichera un écran noir
+                }
+                return;
+            }
+            
             // Gérer la sélection de réponse
             if (this.battleState === 'player_choice') {
                 if (e.key === 'ArrowUp' || e.key === 'z' || e.key === 'Z') {
@@ -180,7 +307,8 @@ class Phase3_Boss {
             
             // Vérifier si le boss est KO
             if (this.bossHp <= 0) {
-                this.battleState = 'victory';
+                this.battleState = 'victory_dialogue';
+                this.waitingForDialogueInput = false;
             }
         } else {
             // Mauvaise réponse : joueur prend 20 dégâts
@@ -191,30 +319,37 @@ class Phase3_Boss {
             
             // Vérifier si le joueur est KO
             if (this.game.playerData.hp <= 0) {
-                this.battleState = 'game_over';
+                this.battleState = 'defeat_dialogue';
+                this.waitingForDialogueInput = false;
             }
         }
     }
     
     nextTurn() {
-        if (this.battleState === 'victory' || this.battleState === 'game_over') {
-            return;
-        }
-        
+        // Passer au tour suivant
         this.currentTurn++;
-        this.selectedAnswerIndex = 0;
         
-        // Vérifier si on a fait toutes les questions
+        // Vérifier si on a atteint la fin du combat (5 tours max)
         if (this.currentTurn >= this.bossPhrases.length) {
-            // Toutes les questions passées sans KO → Game Over
-            this.battleState = 'game_over';
-            return;
+            // Combat terminé, déterminer le vainqueur
+            if (this.bossHp <= 0) {
+                this.battleState = 'victory_dialogue';
+                this.waitingForDialogueInput = false;
+            } else if (this.game.playerData.hp <= 0) {
+                this.battleState = 'defeat_dialogue';
+                this.waitingForDialogueInput = false;
+            } else {
+                // Ni l'un ni l'autre n'est KO, mais on a fait tous les tours
+                // Le boss gagne par défaut
+                this.battleState = 'defeat_dialogue';
+                this.waitingForDialogueInput = false;
+            }
+        } else {
+            // Continuer le combat
+            this.battleState = 'boss_talk';
+            this.bossTalkTimer = 0;
+            this.selectedAnswerIndex = 0;
         }
-        
-        // Nouveau tour : le boss parle
-        this.battleState = 'boss_talk';
-        this.resultMessage = null;
-        this.bossTalkTimer = 0; // Réinitialiser le timer
     }
     
     cleanup() {
@@ -230,236 +365,265 @@ class Phase3_Boss {
     }
     
     update(deltaTime, keys) {
-        // Ne pas mettre à jour si game over ou victory (on attend le clic)
-        if (this.battleState === 'game_over' || this.battleState === 'victory') {
+        // Timer pour la pulsation du cœur
+        this.heartPulseTime += deltaTime;
+        
+        // Timer pour la flèche clignotante dans les dialogues
+        this.dialogueArrowBlinkTimer += deltaTime;
+        
+        // Gérer le dialogue d'introduction
+        if (this.battleState === 'intro_dialogue') {
+            this.introDialogueTimer += deltaTime;
+            if (this.introDialogueTimer >= 0.5 && !this.waitingForDialogueInput) {
+                this.waitingForDialogueInput = true;
+            }
+            // Mettre à jour les animations du joueur pendant le dialogue
+            if (this.player && this.player.currentAnimation) {
+                this.player.currentAnimation.update(deltaTime);
+            }
+            return; // Ne pas mettre à jour le mouvement pendant le dialogue d'intro
+        }
+        
+        // Gérer les dialogues de victoire/défaite
+        if (this.battleState === 'victory_dialogue' || this.battleState === 'defeat_dialogue') {
+            if (!this.waitingForDialogueInput) {
+                this.waitingForDialogueInput = true;
+            }
+            // Mettre à jour les animations du joueur pendant le dialogue
+            if (this.player && this.player.currentAnimation) {
+                this.player.currentAnimation.update(deltaTime);
+            }
+            return; // Ne pas mettre à jour le mouvement pendant les dialogues
+        }
+        
+        // Si Game Over, ne rien faire
+        if (this.battleState === 'game_over') {
             return;
         }
         
-        // Animation du cœur (pulsation)
-        if (!this.heartPulseTime) this.heartPulseTime = 0;
-        this.heartPulseTime += deltaTime;
+        // Mode libre après victoire : permettre le mouvement
+        if (this.battleState === 'victory_free') {
+            if (this.player) {
+                this.player.update(keys, deltaTime);
+            }
+            return;
+        }
         
-        // Transition automatique du boss_talk vers player_choice
+        // Pendant le combat, ne pas permettre le mouvement
+        // Mettre à jour les animations du joueur
+        if (this.player && this.player.currentAnimation) {
+            this.player.currentAnimation.update(deltaTime);
+        }
+        
+        // Gestion de la transition automatique de boss_talk vers player_choice
         if (this.battleState === 'boss_talk') {
-            if (!this.bossTalkTimer) this.bossTalkTimer = 0;
             this.bossTalkTimer += deltaTime;
-            if (this.bossTalkTimer >= 2.0) {
+            
+            // Après 2 secondes, passer au choix du joueur
+            if (this.bossTalkTimer >= 2) {
                 this.battleState = 'player_choice';
-                this.bossTalkTimer = 0;
             }
         }
     }
     
     render(ctx) {
-        // Nettoyer le canvas
-        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        // Fond : sol de donjon (briques grises)
+        this.renderDungeonFloor(ctx);
         
-        // Fond dégradé (style Pokémon - ciel)
-        const gradient = ctx.createLinearGradient(0, 0, 0, this.canvas.height * 0.6);
-        gradient.addColorStop(0, '#87CEEB'); // Ciel clair
-        gradient.addColorStop(1, '#98D8D8'); // Ciel plus foncé
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height * 0.6);
+        // Dessiner la scène (cage, moto, boss, joueur)
+        this.renderScene(ctx);
         
-        // Sol (style Pokémon avec lignes horizontales)
-        const groundY = this.canvas.height * 0.6;
-        ctx.fillStyle = '#E8E8D0'; // Beige clair
-        ctx.fillRect(0, groundY, this.canvas.width, this.canvas.height - groundY);
-        
-        // Lignes horizontales sur le sol (style Pokémon)
-        ctx.strokeStyle = '#D0D0B8';
-        ctx.lineWidth = 2;
-        for (let i = 0; i < 5; i++) {
-            const lineY = groundY + (this.canvas.height - groundY) / 5 * i;
-            ctx.beginPath();
-            ctx.moveTo(0, lineY);
-            ctx.lineTo(this.canvas.width, lineY);
-            ctx.stroke();
-        }
-        
-        // ========== BOSS CŒUR (arrière-plan, à droite) ==========
-        this.renderHeartBoss(ctx);
-        
-        // ========== CHEVALIER (premier plan, vue de dos, grand, à gauche) ==========
-        this.renderKnightBack(ctx);
-        
-        // ========== INTERFACE DE COMBAT ==========
-        this.renderBattleUI(ctx);
-        
-        // ========== GAME OVER / VICTOIRE ==========
+        // Rendu selon l'état
         if (this.battleState === 'game_over') {
             this.renderGameOver(ctx);
-        } else if (this.battleState === 'victory') {
-            this.renderVictory(ctx);
+        } else if (this.battleState === 'victory_dialogue' || this.battleState === 'defeat_dialogue' || this.battleState === 'intro_dialogue') {
+            this.renderDialogue(ctx);
+        } else if (this.battleState !== 'victory_free') {
+            this.renderBattleUI(ctx);
         }
     }
     
-    renderHeartBoss(ctx) {
-        const centerX = this.canvas.width * 0.75; // À droite de l'écran (style Pokémon)
-        const groundY = this.canvas.height * 0.6;
-        const centerY = groundY + (this.canvas.height - groundY) / 2; // Sur le sol
+    renderDungeonFloor(ctx) {
+        // Couleur de fond gris foncé
+        ctx.fillStyle = '#2C2C2C';
+        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         
-        // Effet de pulsation (plus subtil)
-        const pulse = Math.sin(this.heartPulseTime * 1.5) * 0.05 + 1; // Pulsation entre 0.95 et 1.05
-        const heartSize = 180 * pulse; // Plus grand pour être visible
+        // Dessiner des briques grises
+        const brickWidth = 64;
+        const brickHeight = 32;
+        const brickColor = '#404040';
+        const brickBorder = '#202020';
         
-        ctx.save();
-        ctx.translate(centerX, centerY);
-        
-        // Dessiner un cœur rouge
-        ctx.fillStyle = '#FF0000';
-        ctx.beginPath();
-        const topCurveHeight = heartSize * 0.3;
-        ctx.moveTo(0, topCurveHeight);
-        // Gauche
-        ctx.bezierCurveTo(-heartSize / 2, -topCurveHeight / 2, -heartSize / 2, -heartSize / 2, 0, -heartSize / 2);
-        // Droite
-        ctx.bezierCurveTo(heartSize / 2, -heartSize / 2, heartSize / 2, -topCurveHeight / 2, 0, topCurveHeight);
-        ctx.closePath();
-        ctx.fill();
-        
-        // Yeux
-        ctx.fillStyle = '#FFFFFF';
-        ctx.beginPath();
-        ctx.arc(-heartSize * 0.2, -heartSize * 0.1, heartSize * 0.08, 0, Math.PI * 2);
-        ctx.arc(heartSize * 0.2, -heartSize * 0.1, heartSize * 0.08, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Pupilles
-        ctx.fillStyle = '#000000';
-        ctx.beginPath();
-        ctx.arc(-heartSize * 0.2, -heartSize * 0.1, heartSize * 0.04, 0, Math.PI * 2);
-        ctx.arc(heartSize * 0.2, -heartSize * 0.1, heartSize * 0.04, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Sourire
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(0, heartSize * 0.1, heartSize * 0.2, 0, Math.PI);
-        ctx.stroke();
-        
-        ctx.restore();
-        
-        // Barre de vie du boss (en haut à droite, style Pokémon)
-        const bossHpPercent = (this.bossHp / this.bossMaxHp) * 100;
-        const hpBarWidth = 250;
-        const hpBarHeight = 25;
-        const hpBarX = this.canvas.width - hpBarWidth - 20;
-        const hpBarY = 20;
-        
-        // Fond de la barre (noir)
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(hpBarX, hpBarY, hpBarWidth + 4, hpBarHeight + 4);
-        
-        // Fond de la barre (gris)
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(hpBarX + 2, hpBarY + 2, hpBarWidth, hpBarHeight);
-        
-        // Fond interne (rouge clair)
-        ctx.fillStyle = '#F8D030';
-        ctx.fillRect(hpBarX + 4, hpBarY + 4, hpBarWidth - 4, hpBarHeight - 4);
-        
-        // Barre de vie (vert/jaune/rouge selon les HP)
-        ctx.fillStyle = bossHpPercent > 50 ? '#00FF00' : bossHpPercent > 25 ? '#FFFF00' : '#FF0000';
-        ctx.fillRect(hpBarX + 4, hpBarY + 4, (hpBarWidth - 4) * (bossHpPercent / 100), hpBarHeight - 4);
-        
-        // Bordure noire
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(hpBarX + 2, hpBarY + 2, hpBarWidth, hpBarHeight);
-        
-        // Texte HP (style Pokémon)
-        ctx.fillStyle = '#000000';
-        ctx.font = 'bold 16px Arial';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        ctx.fillText(`CŒUR AMOUREUX`, hpBarX + 6, hpBarY - 18);
-        ctx.fillText(`HP: ${this.bossHp}/${this.bossMaxHp}`, hpBarX + 6, hpBarY + 8);
+        for (let y = 0; y < this.canvas.height; y += brickHeight) {
+            for (let x = 0; x < this.canvas.width; x += brickWidth) {
+                // Décaler les briques de la deuxième ligne
+                const offsetX = (Math.floor(y / brickHeight) % 2 === 0) ? 0 : brickWidth / 2;
+                
+                ctx.fillStyle = brickColor;
+                ctx.fillRect(x + offsetX, y, brickWidth - 2, brickHeight - 2);
+                
+                ctx.strokeStyle = brickBorder;
+                ctx.lineWidth = 1;
+                ctx.strokeRect(x + offsetX, y, brickWidth - 2, brickHeight - 2);
+            }
+        }
     }
     
-    renderKnightBack(ctx) {
-        // Chevalier en premier plan (vue de dos, grand, style Pokémon)
-        const groundY = this.canvas.height * 0.6;
-        const knightX = this.canvas.width * 0.25; // À gauche de l'écran (style Pokémon)
-        const knightY = groundY + (this.canvas.height - groundY) * 0.85; // Sur le sol, vers le bas
-        const knightSize = 280; // Grand (agrandi pour premier plan)
-        const scale = knightSize / 64; // Facteur d'agrandissement
+    renderScene(ctx) {
+        // Dessiner la cage (si visible)
+        if (this.cageVisible) {
+            this.renderCage(ctx);
+        }
         
-        // Utiliser le sprite du joueur s'il est chargé
-        if (this.player && this.player.spriteLoaded && this.player.spriteSheet && this.player.animations && this.player.animations.idle) {
-            ctx.save();
+        // Dessiner la moto derrière les barreaux (si la cage est visible) ou devant (si la cage n'est plus visible)
+        if (this.bikeSpriteLoaded && this.bikeSprite) {
+            const bikeX = this.cageX + this.cageWidth / 2 - this.bikeSprite.width / 2;
+            const bikeY = this.cageY + this.cageHeight / 2 - this.bikeSprite.height / 2;
             
-            // Positionner le chevalier (point d'ancrage en bas au centre du sprite)
-            ctx.translate(knightX, knightY);
-            ctx.scale(scale, scale);
-            
-            // Utiliser la première frame de l'animation idle (vue de face)
-            // Pour la vue de dos, on peut utiliser le sprite normal (les sprites sont souvent symétriques)
-            const frameIndex = this.player.animations.idle.frames[0];
-            
-            // Dessiner le sprite (point d'ancrage en bas)
-            this.player.spriteSheet.drawFrame(ctx, frameIndex, -32, -64, 1, false);
-            
-            ctx.restore();
+            ctx.drawImage(this.bikeSprite, bikeX, bikeY);
         } else {
-            // Fallback : dessiner un rectangle représentatif si le sprite n'est pas chargé
-            ctx.fillStyle = '#4A4A4A'; // Gris foncé pour l'armure
-            ctx.fillRect(knightX - knightSize / 2, knightY - knightSize, knightSize, knightSize);
-            
-            // Casque
+            // Fallback : rectangle représentatif
             ctx.fillStyle = '#666666';
-            ctx.beginPath();
-            ctx.arc(knightX, knightY - knightSize * 0.8, knightSize * 0.15, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Épée (tenue de dos)
-            ctx.fillStyle = '#C0C0C0';
-            ctx.fillRect(knightX + knightSize * 0.1, knightY - knightSize * 0.5, knightSize * 0.05, knightSize * 0.4);
+            ctx.fillRect(this.cageX + this.cageWidth / 2 - 50, this.cageY + this.cageHeight / 2 - 30, 100, 60);
         }
         
-        // Barre de vie du joueur (en haut à gauche, style Pokémon)
-        const playerHpPercent = (this.game.playerData.hp / this.game.playerData.maxHp) * 100;
-        const hpBarWidth = 250;
-        const hpBarHeight = 25;
-        const hpBarX = 20;
-        const hpBarY = 20;
+        // Dessiner le boss (cœur) devant la cage (seulement si pas en mode libre)
+        if (this.battleState !== 'victory_free' && this.battleState !== 'victory_dialogue') {
+            if (this.bossSpriteLoaded && this.bossSprite) {
+                const bossX = this.cageX + this.cageWidth / 2 - this.bossSprite.width / 2;
+                const bossY = this.cageY - this.bossSprite.height - 20;
+                
+                // Effet de pulsation
+                const pulse = 1 + Math.sin(this.heartPulseTime * 3) * 0.1;
+                ctx.save();
+                ctx.translate(bossX + this.bossSprite.width / 2, bossY + this.bossSprite.height / 2);
+                ctx.scale(pulse, pulse);
+                ctx.drawImage(this.bossSprite, -this.bossSprite.width / 2, -this.bossSprite.height / 2);
+                ctx.restore();
+            } else {
+                // Fallback : cœur dessiné
+                const bossX = this.cageX + this.cageWidth / 2;
+                const bossY = this.cageY - 50;
+                const bossSize = 64;
+                
+                const pulse = 1 + Math.sin(this.heartPulseTime * 3) * 0.1;
+                ctx.save();
+                ctx.translate(bossX, bossY);
+                ctx.scale(pulse, pulse);
+                
+                ctx.fillStyle = '#FF0000';
+                ctx.beginPath();
+                ctx.moveTo(0, 10);
+                ctx.bezierCurveTo(-25, -10, -50, 0, -25, 40);
+                ctx.lineTo(0, 60);
+                ctx.lineTo(25, 40);
+                ctx.bezierCurveTo(50, 0, 25, -10, 0, 10);
+                ctx.closePath();
+                ctx.fill();
+                
+                ctx.restore();
+            }
+        }
         
-        // Fond de la barre (noir)
+        // Dessiner le joueur (utiliser la méthode render du Player)
+        if (this.player) {
+            this.player.render(ctx);
+        }
+    }
+    
+    renderCage(ctx) {
+        // Barreaux verticaux
+        const barSpacing = 20;
+        const barWidth = 4;
+        ctx.fillStyle = '#666666';
+        
+        for (let x = this.cageX; x <= this.cageX + this.cageWidth; x += barSpacing) {
+            ctx.fillRect(x, this.cageY, barWidth, this.cageHeight);
+        }
+        
+        // Barreaux horizontaux (haut et bas)
+        ctx.fillRect(this.cageX, this.cageY, this.cageWidth, barWidth);
+        ctx.fillRect(this.cageX, this.cageY + this.cageHeight - barWidth, this.cageWidth, barWidth);
+        
+        // Coins renforcés
+        const cornerSize = 8;
+        ctx.fillStyle = '#888888';
+        ctx.fillRect(this.cageX, this.cageY, cornerSize, cornerSize);
+        ctx.fillRect(this.cageX + this.cageWidth - cornerSize, this.cageY, cornerSize, cornerSize);
+        ctx.fillRect(this.cageX, this.cageY + this.cageHeight - cornerSize, cornerSize, cornerSize);
+        ctx.fillRect(this.cageX + this.cageWidth - cornerSize, this.cageY + this.cageHeight - cornerSize, cornerSize, cornerSize);
+    }
+    
+    renderDialogue(ctx) {
+        // Cadre de dialogue en bas
+        const dialogHeight = 200;
+        const dialogWidth = this.canvas.width - 40;
+        const dialogX = 20;
+        const dialogY = this.canvas.height - dialogHeight - 20;
+        
+        // Fond du dialogue
         ctx.fillStyle = '#000000';
-        ctx.fillRect(hpBarX, hpBarY, hpBarWidth + 4, hpBarHeight + 4);
+        ctx.fillRect(dialogX, dialogY, dialogWidth, dialogHeight);
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(dialogX, dialogY, dialogWidth, dialogHeight);
         
-        // Fond de la barre (gris)
         ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(hpBarX + 2, hpBarY + 2, hpBarWidth, hpBarHeight);
-        
-        // Fond interne (rouge clair)
-        ctx.fillStyle = '#F8D030';
-        ctx.fillRect(hpBarX + 4, hpBarY + 4, hpBarWidth - 4, hpBarHeight - 4);
-        
-        // Barre de vie (vert/jaune/rouge selon les HP)
-        ctx.fillStyle = playerHpPercent > 50 ? '#00FF00' : playerHpPercent > 25 ? '#FFFF00' : '#FF0000';
-        ctx.fillRect(hpBarX + 4, hpBarY + 4, (hpBarWidth - 4) * (playerHpPercent / 100), hpBarHeight - 4);
-        
-        // Bordure noire
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(hpBarX + 2, hpBarY + 2, hpBarWidth, hpBarHeight);
-        
-        // Texte HP (style Pokémon)
-        ctx.fillStyle = '#000000';
-        ctx.font = 'bold 16px Arial';
+        ctx.font = 'bold 18px Arial';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
-        ctx.fillText(`CHEVALIER`, hpBarX + 6, hpBarY - 18);
-        ctx.fillText(`HP: ${Math.floor(this.game.playerData.hp)}/${Math.floor(this.game.playerData.maxHp)}`, hpBarX + 6, hpBarY + 8);
+        
+        let dialogueText = '';
+        if (this.battleState === 'intro_dialogue') {
+            dialogueText = this.introDialogueLines[0];
+        } else if (this.battleState === 'victory_dialogue') {
+            dialogueText = this.victoryDialogueLines[0];
+        } else if (this.battleState === 'defeat_dialogue') {
+            dialogueText = this.defeatDialogueLines[0];
+        }
+        
+        // Afficher le texte du dialogue
+        const lines = this.wrapText(ctx, dialogueText, dialogWidth - 40);
+        let yPos = dialogY + 20;
+        lines.forEach(line => {
+            ctx.fillText(line, dialogX + 20, yPos);
+            yPos += 25;
+        });
+        
+        // Flèche clignotante
+        if (this.waitingForDialogueInput && Math.floor(this.dialogueArrowBlinkTimer * 2) % 2 === 0) {
+            ctx.fillStyle = '#FFFFFF';
+            const arrowX = dialogX + dialogWidth - 40;
+            const arrowY = dialogY + dialogHeight - 40;
+            ctx.beginPath();
+            ctx.moveTo(arrowX, arrowY);
+            ctx.lineTo(arrowX - 10, arrowY - 10);
+            ctx.lineTo(arrowX - 10, arrowY + 10);
+            ctx.closePath();
+            ctx.fill();
+        }
+    }
+    
+    wrapText(ctx, text, maxWidth) {
+        const words = text.split(' ');
+        const lines = [];
+        let currentLine = words[0];
+        
+        for (let i = 1; i < words.length; i++) {
+            const word = words[i];
+            const width = ctx.measureText(currentLine + ' ' + word).width;
+            if (width < maxWidth) {
+                currentLine += ' ' + word;
+            } else {
+                lines.push(currentLine);
+                currentLine = word;
+            }
+        }
+        lines.push(currentLine);
+        return lines;
     }
     
     renderBattleUI(ctx) {
-        if (this.battleState === 'game_over' || this.battleState === 'victory') {
-            return;
-        }
-        
         // Cadre de dialogue en bas
         const dialogHeight = 200;
         const dialogWidth = this.canvas.width - 40;
@@ -481,7 +645,7 @@ class Phase3_Boss {
         if (this.battleState === 'boss_talk') {
             // Le boss parle
             const currentPhrase = this.bossPhrases[this.currentTurn];
-            ctx.fillText(`BOSS: ${currentPhrase.text}`, dialogX + 20, dialogY + 20);
+            ctx.fillText(`AMAR: ${currentPhrase.text}`, dialogX + 20, dialogY + 20);
         } else if (this.battleState === 'player_choice') {
             // Choix du joueur
             const currentPhrase = this.bossPhrases[this.currentTurn];
@@ -561,11 +725,5 @@ class Phase3_Boss {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('Rejouer', this.canvas.width / 2, buttonY + buttonHeight / 2);
-    }
-    
-    renderVictory(ctx) {
-        // Écran noir (victoire)
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     }
 }
