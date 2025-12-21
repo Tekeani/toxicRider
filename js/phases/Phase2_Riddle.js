@@ -17,13 +17,42 @@ class Phase2_Riddle {
         this.dialogueActive = false;
         this.dialogueIndex = 0;
         this.dialogueLines = [
-            "Bienvenue, chevalier...",
-            "Pour entrer dans ce château, tu dois résoudre mon énigme.",
-            "Es-tu prêt ?"
+            "Meuh ! Tremble devant le terrible gardien du terrible donjon de la terrible Amar !",
+            "*ton soudainement enjouée* Tu veux bien jouer avec moi :) ?",
+            "Je te propose un deal : réponds correctement à ma devinette et je te laisse franchir les portes du donjon (*marmonne* de toute façon Amar ne me paye pas assez pour ces conneries...)",
+            "Si tu te trompes, tu devras te retourner, te défroquer, te pencher et *rire sardonique*"
         ];
         this.dialogueArrowBlinkTimer = 0;
         this.dialogueCooldown = 0.3;
         this.waitingForDialogueInput = false;
+        
+        // État de l'énigme
+        this.riddleState = 'dialogue'; // 'dialogue' | 'riddle' | 'result'
+        this.riddleLines = [
+            "Je me hisse chaque matin,",
+            "Ou branlé par une main,",
+            "Fièrement droit et large, jamais chagrin,",
+            "Sauf lorsque je projette mon crachin.",
+            "Qui suis-je ?"
+        ];
+        this.answerChoices = [
+            "Ta mère la catin",
+            "Justin",
+            "Damien"
+        ];
+        this.selectedAnswerIndex = 0; // Index du choix sélectionné (0, 1, 2)
+        this.correctAnswerIndex = 1; // Justin est la bonne réponse
+        this.answerResult = null; // 'correct' | 'incorrect'
+        this.resultText = ''; // Texte du résultat
+        
+        // État Game Over
+        this.gameOver = false;
+        this.gameOverText = "BWAHAHAHAHA ! Retour à la case départ sale nigaud !";
+        this.buttonPressed = false;
+        
+        // État transition vers boss (écran noir)
+        this.bossTransitionActive = false;
+        this.bossTransitionTimer = 0;
         
         // Décor - Château imposant comme un donjon
         this.castleX = this.canvas.width / 2 - 200; // Centre du château (agrandi)
@@ -33,6 +62,8 @@ class Phase2_Riddle {
         
         // Input handlers
         this.keydownHandler = null;
+        this.keyupHandler = null;
+        this.clickHandler = null;
         this._interactPressed = false; // Flag pour éviter les déclenchements multiples
     }
     
@@ -41,21 +72,29 @@ class Phase2_Riddle {
         const width = this.canvas.width;
         const height = this.canvas.height;
         
-        // Initialiser le joueur (même position que dans Phase1)
-        this.player = new Player(width / 2 - 80, height / 2 + 100, this.game);
-        console.log('✅ Joueur créé à la position:', this.player.x, this.player.y);
-        
         // Initialiser le PNJ (sheepman) en bas du château, accessible
         // Positionner le NPC en bas du château pour qu'il soit accessible
         const npcX = this.castleX + this.castleWidth / 2 - 30; // Centré devant les portes
         const npcY = this.castleY + this.castleHeight + 30; // En bas du château, accessible
+        
+        // Initialiser le joueur à côté du NPC (à gauche du NPC, pas loin)
+        // Positionner le joueur à gauche du NPC pour qu'il soit visible et accessible
+        const playerX = npcX - 150; // À gauche du NPC
+        const playerY = npcY; // Même hauteur que le NPC
+        this.player = new Player(playerX, playerY, this.game);
+        console.log('✅ Joueur créé à la position:', this.player.x, this.player.y);
+        
+        // Créer le NPC et empêcher immédiatement le chargement du sprite par défaut
         this.npc = new NPC(npcX, npcY, this.game);
+        // CRITIQUE : Empêcher le chargement du sprite par défaut AVANT qu'il ne commence
+        this.npc._loading = true;
+        this.npc.spriteLoaded = false;
+        // Annuler le spriteSheet par défaut s'il a été créé
+        this.npc.spriteSheet = null;
         // Définir la taille pour le sheepman (48x64)
         this.npc.width = 96; // 48 * 2
         this.npc.height = 128; // 64 * 2
         console.log('✅ NPC créé à la position:', npcX, npcY);
-        // Empêcher le chargement du sprite par défaut du NPC
-        this.npc._loading = true;
         // Charger le sprite du sheepman
         await this.loadSheepmanSprite();
         
@@ -71,9 +110,13 @@ class Phase2_Riddle {
     
     async loadSheepmanSprite() {
         return new Promise((resolve, reject) => {
-            // Empêcher le chargement du sprite par défaut
+            // CRITIQUE : Empêcher complètement le chargement du sprite par défaut
+            // Annuler toute tentative de chargement du sprite par défaut
             this.npc._loading = true;
             this.npc.spriteLoaded = false;
+            this.npc.spriteSheet = null;
+            this.npc.animations = {};
+            this.npc.currentAnimation = null;
             
             const img = new Image();
             img.onload = () => {
@@ -102,7 +145,7 @@ class Phase2_Riddle {
                     
                     this.npc.spriteLoaded = true;
                     this.npc._loading = false;
-                    console.log('✅ Sprite sheepman chargé');
+                    console.log('✅ Sprite sheepman chargé et configuré');
                     resolve();
                 }
             };
@@ -129,8 +172,8 @@ class Phase2_Riddle {
                 return;
             }
             
-            // Gérer le dialogue
-            if (this.dialogueActive && this.waitingForDialogueInput) {
+            // Gérer le dialogue (avant l'énigme)
+            if (this.dialogueActive && this.riddleState === 'dialogue' && this.waitingForDialogueInput) {
                 if ((e.key === 'Enter' || e.key === 'e' || e.key === 'E') && !this._interactPressed) {
                     e.preventDefault();
                     this._interactPressed = true;
@@ -140,10 +183,54 @@ class Phase2_Riddle {
                     // Passer au dialogue suivant
                     this.dialogueIndex++;
                     if (this.dialogueIndex >= this.dialogueLines.length) {
-                        // Dialogue terminé
+                        // Dialogue terminé, passer à l'énigme
+                        this.riddleState = 'riddle';
+                        this.selectedAnswerIndex = 0;
+                        console.log('✅ Dialogue terminé, passage à l\'énigme');
+                        // Réinitialiser le cooldown pour afficher immédiatement l'énigme
+                        this.dialogueCooldown = 0;
+                        this.waitingForDialogueInput = false;
+                    }
+                }
+                return;
+            }
+            
+            // Gérer la sélection de réponse dans l'énigme
+            if (this.dialogueActive && this.riddleState === 'riddle') {
+                if (e.key === 'ArrowUp' || e.key === 'z' || e.key === 'Z') {
+                    e.preventDefault();
+                    // Déplacer la sélection vers le haut
+                    this.selectedAnswerIndex = (this.selectedAnswerIndex - 1 + this.answerChoices.length) % this.answerChoices.length;
+                } else if (e.key === 'ArrowDown' || e.key === 'w' || e.key === 'W') {
+                    e.preventDefault();
+                    // Déplacer la sélection vers le bas
+                    this.selectedAnswerIndex = (this.selectedAnswerIndex + 1) % this.answerChoices.length;
+                } else if ((e.key === 'Enter' || e.key === 'e' || e.key === 'E') && !this._interactPressed) {
+                    e.preventDefault();
+                    this._interactPressed = true;
+                    // Valider la réponse
+                    this.checkAnswer();
+                }
+                return;
+            }
+            
+            // Gérer le résultat (après la réponse)
+            if (this.dialogueActive && this.riddleState === 'result' && this.waitingForDialogueInput) {
+                if ((e.key === 'Enter' || e.key === 'e' || e.key === 'E') && !this._interactPressed) {
+                    e.preventDefault();
+                    this._interactPressed = true;
+                    
+                    if (this.answerResult === 'correct') {
+                        // Réponse correcte : afficher écran noir puis passer à la phase boss
+                        console.log('✅ Réponse correcte, transition vers phase boss');
                         this.dialogueActive = false;
-                        this.dialogueIndex = 0;
-                        console.log('✅ Dialogue terminé');
+                        this.bossTransitionActive = true;
+                        this.bossTransitionTimer = 0;
+                    } else {
+                        // Réponse incorrecte : Game Over
+                        console.log('❌ Réponse incorrecte, Game Over');
+                        this.dialogueActive = false;
+                        this.gameOver = true;
                     }
                 }
                 return;
@@ -174,6 +261,50 @@ class Phase2_Riddle {
         
         document.addEventListener('keydown', this.keydownHandler);
         document.addEventListener('keyup', this.keyupHandler);
+        
+        // Gestion des clics pour le bouton Rejouer
+        this.clickHandler = (e) => {
+            const rect = this.canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            this.handleClick(x, y);
+        };
+        this.canvas.addEventListener('click', this.clickHandler);
+    }
+    
+    handleClick(x, y) {
+        // Gérer le clic sur le bouton "Rejouer" si Game Over
+        if (this.gameOver) {
+            const buttonWidth = 200;
+            const buttonHeight = 60;
+            const buttonX = (this.canvas.width - buttonWidth) / 2;
+            const buttonY = this.canvas.height / 2 + 50;
+            
+            if (x >= buttonX && x <= buttonX + buttonWidth &&
+                y >= buttonY && y <= buttonY + buttonHeight) {
+                // Clic sur le bouton Rejouer
+                this.buttonPressed = true;
+                
+                // Retourner à Phase1_Roguelike (vague 1)
+                setTimeout(() => {
+                    this.buttonPressed = false;
+                    console.log('🔄 Retour à Phase1_Roguelike (vague 1)');
+                    // Nettoyer Phase2
+                    this.cleanup();
+                    // Réinitialiser l'index de phase pour revenir à Phase1
+                    this.game.phaseIndex = 1; // Phase1 est à l'index 1 (Phase0 est à 0)
+                    this.game.currentPhase = this.game.phases[1];
+                    // Réinitialiser la phase
+                    this.game.currentPhase.init().then(() => {
+                        // Appeler restartWave après l'initialisation
+                        if (this.game.currentPhase.restartWave) {
+                            this.game.currentPhase.restartWave();
+                        }
+                        console.log('✅ Phase1 réinitialisée avec succès');
+                    });
+                }, 150);
+            }
+        }
     }
     
     // Vérifier si le joueur est au contact du NPC
@@ -193,12 +324,34 @@ class Phase2_Riddle {
         return distance < 80;
     }
     
+    checkAnswer() {
+        if (this.selectedAnswerIndex === this.correctAnswerIndex) {
+            // Réponse correcte
+            this.answerResult = 'correct';
+            this.riddleState = 'result';
+            this.resultText = "Zut, moi qui voulait t'enc... Heu bonne chance face à Amar ! Meuh !";
+            this.waitingForDialogueInput = false;
+            this.dialogueCooldown = 0.3;
+            console.log('✅ Réponse correcte !');
+        } else {
+            // Réponse incorrecte
+            this.answerResult = 'incorrect';
+            this.riddleState = 'result';
+            this.waitingForDialogueInput = false;
+            this.dialogueCooldown = 0.3;
+            console.log('❌ Réponse incorrecte !');
+        }
+    }
+    
     cleanup() {
         if (this.keydownHandler) {
             document.removeEventListener('keydown', this.keydownHandler);
         }
         if (this.keyupHandler) {
             document.removeEventListener('keyup', this.keyupHandler);
+        }
+        if (this.clickHandler) {
+            this.canvas.removeEventListener('click', this.clickHandler);
         }
     }
     
@@ -208,6 +361,15 @@ class Phase2_Riddle {
                x + width > this.castleX &&
                y < this.castleY + this.castleHeight &&
                y + height > this.castleY;
+    }
+    
+    // Vérifier si une position entre en collision avec le NPC
+    isCollidingWithNPC(x, y, width, height) {
+        if (!this.npc) return false;
+        return x < this.npc.x + this.npc.width &&
+               x + width > this.npc.x &&
+               y < this.npc.y + this.npc.height &&
+               y + height > this.npc.y;
     }
     
     update(deltaTime, keys) {
@@ -221,13 +383,24 @@ class Phase2_Riddle {
             return;
         }
         
+        // Gérer le Game Over
+        if (this.gameOver) {
+            // Ne rien faire, on attend le clic sur le bouton "Rejouer"
+            return;
+        }
+        
         // Gérer le dialogue
         if (this.dialogueActive) {
             this.dialogueArrowBlinkTimer += deltaTime;
-            this.dialogueCooldown -= deltaTime;
-            if (this.dialogueCooldown <= 0) {
-                this.waitingForDialogueInput = true;
+            
+            // Activer l'attente d'input seulement pour le dialogue et le résultat (pas pour l'énigme)
+            if (this.riddleState === 'dialogue' || this.riddleState === 'result') {
+                this.dialogueCooldown -= deltaTime;
+                if (this.dialogueCooldown <= 0) {
+                    this.waitingForDialogueInput = true;
+                }
             }
+            
             // Mettre à jour les animations pendant le dialogue
             if (this.player && this.player.currentAnimation) {
                 this.player.currentAnimation.update(deltaTime);
@@ -244,22 +417,74 @@ class Phase2_Riddle {
             const oldX = this.player.x;
             const oldY = this.player.y;
             
-            // Mettre à jour le joueur
-            this.player.update(keys, deltaTime);
+            // Calculer le mouvement manuellement pour éviter les limites restrictives de Player.update()
+            // Player.update() limite à 70% de la hauteur, mais dans Phase2 on veut utiliser toute la hauteur
+            const speedPerSecond = this.player.speed * 60;
+            let newX = this.player.x;
+            let newY = this.player.y;
+            let isMoving = false;
             
-            // Vérifier si le joueur tente de rentrer dans le château
-            if (this.isInCastle(this.player.x, this.player.y, this.player.width, this.player.height)) {
-                // Empêcher le mouvement en restaurant l'ancienne position
-                this.player.x = oldX;
-                this.player.y = oldY;
+            // Calculer le mouvement selon les touches
+            if (keys['ArrowUp'] || keys['z'] || keys['Z']) {
+                newY -= speedPerSecond * deltaTime;
+                this.player.direction = 'up';
+                isMoving = true;
+            }
+            if (keys['ArrowDown'] || keys['w'] || keys['W']) {
+                newY += speedPerSecond * deltaTime;
+                this.player.direction = 'down';
+                isMoving = true;
+            }
+            if (keys['ArrowRight'] || keys['s'] || keys['S']) {
+                newX += speedPerSecond * deltaTime;
+                this.player.direction = 'right';
+                isMoving = true;
+            }
+            if (keys['ArrowLeft'] || keys['q'] || keys['Q']) {
+                newX -= speedPerSecond * deltaTime;
+                this.player.direction = 'left';
+                isMoving = true;
+            }
+            
+            this.player.isMoving = isMoving;
+            
+            // Appliquer les limites de l'écran (toute la hauteur pour Phase2)
+            newX = Math.max(0, Math.min(this.canvas.width - this.player.width, newX));
+            newY = Math.max(0, Math.min(this.canvas.height - this.player.height, newY));
+            
+            // Aucune collision - le joueur peut se déplacer librement partout
+            this.player.x = newX;
+            this.player.y = newY;
+            
+            // Mettre à jour les animations du joueur (sans mouvement)
+            // On doit mettre à jour manuellement les animations car Player.update() gère aussi le mouvement
+            if (this.player.currentAnimation) {
+                this.player.currentAnimation.update(deltaTime);
+            }
+            
+            // Sélection de l'animation selon l'état
+            if (!this.player.isAlive) {
+                if (this.player.animations.dead) {
+                    this.player.switchAnimation(this.player.animations.dead);
+                }
+            } else if (this.player.isBlocking) {
+                if (this.player.animations.block) {
+                    this.player.switchAnimation(this.player.animations.block);
+                }
+            } else if (this.player.isMoving) {
+                if (this.player.animations.run) {
+                    this.player.switchAnimation(this.player.animations.run);
+                }
+            } else {
+                if (this.player.animations.idle) {
+                    this.player.switchAnimation(this.player.animations.idle);
+                }
             }
         }
         
         // Mise à jour du PNJ
         if (this.npc) {
-            if (this.npc.currentAnimation) {
-                this.npc.currentAnimation.update(deltaTime);
-            }
+            this.npc.update(deltaTime);
         }
     }
     
@@ -291,6 +516,13 @@ class Phase2_Riddle {
                 }
             }
             
+            return;
+        }
+        
+        // ========== TRANSITION VERS BOSS (écran noir) ==========
+        if (this.bossTransitionActive) {
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
             return;
         }
         
@@ -393,6 +625,49 @@ class Phase2_Riddle {
         // Ombre sur la tour gauche
         ctx.fillRect(this.castleX - 30, this.castleY + 40, 10, towerHeight);
         
+        // Fenêtres du château
+        ctx.fillStyle = '#FFD700'; // Jaune pour les fenêtres (lumière)
+        const windowWidth = 20;
+        const windowHeight = 30;
+        // Fenêtre tour gauche
+        const leftTowerWindowX = this.castleX - 15;
+        const leftTowerWindowY = this.castleY + 100;
+        ctx.fillRect(leftTowerWindowX, leftTowerWindowY, windowWidth, windowHeight);
+        // Fenêtre tour droite
+        const rightTowerWindowX = this.castleX + this.castleWidth - 5;
+        const rightTowerWindowY = this.castleY + 100;
+        ctx.fillRect(rightTowerWindowX, rightTowerWindowY, windowWidth, windowHeight);
+        // Fenêtres tour centrale (2 fenêtres)
+        const centerTowerLeftWindowX = centerTowerX + 15;
+        const centerTowerRightWindowX = centerTowerX + centerTowerWidth - 35;
+        const centerTowerWindowY = this.castleY + 80;
+        ctx.fillRect(centerTowerLeftWindowX, centerTowerWindowY, windowWidth, windowHeight);
+        ctx.fillRect(centerTowerRightWindowX, centerTowerWindowY, windowWidth, windowHeight);
+        // Fenêtre supérieure tour centrale
+        ctx.fillRect(centerTowerLeftWindowX, this.castleY + 50, windowWidth, windowHeight);
+        ctx.fillRect(centerTowerRightWindowX, this.castleY + 50, windowWidth, windowHeight);
+        // Croix dans les fenêtres (barreaux)
+        ctx.fillStyle = '#1a1008'; // Brun très foncé pour les barreaux
+        ctx.lineWidth = 2;
+        // Tour gauche
+        ctx.strokeRect(leftTowerWindowX + 2, leftTowerWindowY + 2, windowWidth - 4, windowHeight - 4);
+        ctx.fillRect(leftTowerWindowX + windowWidth / 2 - 1, leftTowerWindowY + 2, 2, windowHeight - 4);
+        ctx.fillRect(leftTowerWindowX + 2, leftTowerWindowY + windowHeight / 2 - 1, windowWidth - 4, 2);
+        // Tour droite
+        ctx.strokeRect(rightTowerWindowX + 2, rightTowerWindowY + 2, windowWidth - 4, windowHeight - 4);
+        ctx.fillRect(rightTowerWindowX + windowWidth / 2 - 1, rightTowerWindowY + 2, 2, windowHeight - 4);
+        ctx.fillRect(rightTowerWindowX + 2, rightTowerWindowY + windowHeight / 2 - 1, windowWidth - 4, 2);
+        // Tours centrales
+        const drawWindowCross = (x, y) => {
+            ctx.strokeRect(x + 2, y + 2, windowWidth - 4, windowHeight - 4);
+            ctx.fillRect(x + windowWidth / 2 - 1, y + 2, 2, windowHeight - 4);
+            ctx.fillRect(x + 2, y + windowHeight / 2 - 1, windowWidth - 4, 2);
+        };
+        drawWindowCross(centerTowerLeftWindowX, centerTowerWindowY);
+        drawWindowCross(centerTowerRightWindowX, centerTowerWindowY);
+        drawWindowCross(centerTowerLeftWindowX, this.castleY + 50);
+        drawWindowCross(centerTowerRightWindowX, this.castleY + 50);
+        
         // Portes (fermées) - plus grandes et imposantes au centre
         ctx.fillStyle = '#2F1B14'; // Brun foncé pour les portes
         const doorWidth = 60;
@@ -413,7 +688,7 @@ class Phase2_Riddle {
         ctx.fillRect(doorX + 10, doorY + 20, 4, 100);
         ctx.fillRect(doorX + doorWidth - 14, doorY + 20, 4, 100);
         
-        // ========== PNJ (vieil homme) ==========
+        // ========== PNJ (sheepman) ==========
         if (this.npc) {
             this.npc.render(ctx);
         }
@@ -421,6 +696,52 @@ class Phase2_Riddle {
         // ========== JOUEUR ==========
         if (this.player) {
             this.player.render(ctx);
+        }
+        
+        // ========== GAME OVER (rendu en dernier, même style que Phase1) ==========
+        if (this.gameOver) {
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.globalAlpha = 1;
+            ctx.imageSmoothingEnabled = true;
+            
+            // Fond noir semi-transparent
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            
+            // Texte "GAME OVER" (rouge comme dans Phase1)
+            ctx.fillStyle = '#ff0000';
+            ctx.font = 'bold 64px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('GAME OVER', this.canvas.width / 2, this.canvas.height / 2 - 100);
+            
+            // Zone pour le bouton "Rejouer" (même style que Phase1)
+            const buttonWidth = 200;
+            const buttonHeight = 50;
+            const buttonX = this.canvas.width / 2 - buttonWidth / 2;
+            let buttonY = this.canvas.height / 2 + 50;
+            const pressOffset = this.buttonPressed ? 3 : 0; // Décalage quand enfoncé
+            
+            // Ajuster la position si le bouton est pressé
+            buttonY += pressOffset;
+            
+            // Fond du bouton (plus sombre si pressé, même style que Phase1)
+            ctx.fillStyle = this.buttonPressed ? '#222222' : '#333333';
+            ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+            
+            // Bordure du bouton
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
+            
+            // Texte du bouton (centré verticalement et horizontalement)
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('Rejouer', this.canvas.width / 2, buttonY + buttonHeight / 2);
+            
+            return; // Ne pas afficher le dialogue si Game Over
         }
         
         // ========== DIALOGUE (rendu en dernier) ==========
@@ -431,11 +752,21 @@ class Phase2_Riddle {
             ctx.globalCompositeOperation = 'source-over';
             ctx.imageSmoothingEnabled = true;
             
-            // Dimensions de la fenêtre de dialogue (même style que Phase0_Cinematic)
-            const dialogHeight = Math.min(120, Math.max(80, this.canvas.height * 0.15));
+            // Dimensions de la fenêtre de dialogue
             const dialogWidth = Math.min(800, Math.max(500, this.canvas.width * 0.75));
-            const dialogX = (this.canvas.width - dialogWidth) / 2;
-            const dialogY = this.canvas.height * 0.5; // 50% de la hauteur (au milieu de l'écran)
+            let dialogHeight;
+            let dialogX = (this.canvas.width - dialogWidth) / 2;
+            let dialogY;
+            
+            if (this.riddleState === 'riddle') {
+                // Fenêtre plus grande pour l'énigme avec les choix, positionnée plus haut
+                dialogHeight = 350;
+                dialogY = this.canvas.height * 0.15; // Plus haut pour voir tout le dialogue
+            } else {
+                // Fenêtre normale pour le dialogue
+                dialogHeight = Math.min(120, Math.max(80, this.canvas.height * 0.15));
+                dialogY = this.canvas.height * 0.5;
+            }
             
             // Fond noir opaque
             ctx.fillStyle = '#000000';
@@ -451,32 +782,108 @@ class Phase2_Riddle {
             ctx.lineWidth = 1;
             ctx.strokeRect(dialogX + 3, dialogY + 3, dialogWidth - 6, dialogHeight - 6);
             
-            // Texte du dialogue (blanc)
-            if (this.dialogueIndex < this.dialogueLines.length) {
-                ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 18px Arial';
-                ctx.textAlign = 'left';
-                ctx.textBaseline = 'top';
-                const text = this.dialogueLines[this.dialogueIndex];
-                const lines = this.wrapText(ctx, text, dialogWidth - 60);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 18px Arial';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            
+            if (this.riddleState === 'dialogue') {
+                // Afficher le dialogue normal
+                if (this.dialogueIndex < this.dialogueLines.length) {
+                    const text = this.dialogueLines[this.dialogueIndex];
+                    const lines = this.wrapText(ctx, text, dialogWidth - 60);
+                    lines.forEach((line, i) => {
+                        ctx.fillText(line, dialogX + 20, dialogY + 20 + (i * 24));
+                    });
+                }
+                
+                // Flèche clignotante vers le bas
+                if (this.waitingForDialogueInput) {
+                    const arrowVisible = Math.floor(this.dialogueArrowBlinkTimer * 2) % 2 === 0;
+                    if (arrowVisible) {
+                        ctx.fillStyle = '#ffffff';
+                        const arrowX = dialogX + dialogWidth - 30;
+                        const arrowY = dialogY + dialogHeight - 25;
+                        ctx.beginPath();
+                        ctx.moveTo(arrowX, arrowY);
+                        ctx.lineTo(arrowX - 8, arrowY - 8);
+                        ctx.lineTo(arrowX + 8, arrowY - 8);
+                        ctx.closePath();
+                        ctx.fill();
+                    }
+                }
+            } else if (this.riddleState === 'riddle') {
+                // Afficher "Voici mon énigme :"
+                let yPos = dialogY + 20;
+                ctx.fillText("Voici mon énigme :", dialogX + 20, yPos);
+                yPos += 35;
+                
+                // Afficher l'énigme
+                this.riddleLines.forEach((line, i) => {
+                    ctx.fillText(line, dialogX + 20, yPos);
+                    yPos += 30;
+                });
+                
+                // Afficher les choix de réponse
+                yPos += 20;
+                this.answerChoices.forEach((choice, index) => {
+                    const isSelected = index === this.selectedAnswerIndex;
+                    const choiceY = yPos + 15; // Position Y pour le texte
+                    
+                    // Fond pour le choix sélectionné (bien aligné)
+                    if (isSelected) {
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                        ctx.fillRect(dialogX + 15, yPos, dialogWidth - 30, 30);
+                    }
+                    
+                    // Flèche pour le choix sélectionné (pointant vers la droite, style dialogue)
+                    if (isSelected) {
+                        ctx.fillStyle = '#ffffff';
+                        const arrowX = dialogX + 25;
+                        const arrowY = choiceY + 5; // Alignée avec le texte
+                        ctx.beginPath();
+                        ctx.moveTo(arrowX, arrowY);
+                        ctx.lineTo(arrowX - 8, arrowY - 8);
+                        ctx.lineTo(arrowX - 8, arrowY + 8);
+                        ctx.closePath();
+                        ctx.fill();
+                    }
+                    
+                    // Texte du choix
+                    ctx.fillStyle = isSelected ? '#ffff00' : '#ffffff';
+                    ctx.font = 'bold 18px Arial';
+                    ctx.fillText(choice, dialogX + 45, choiceY);
+                    
+                    yPos += 40;
+                });
+            } else if (this.riddleState === 'result') {
+                // Afficher le résultat
+                let resultText = '';
+                if (this.answerResult === 'correct') {
+                    resultText = this.resultText || "Zut, moi qui voulait t'enc... Heu bonne chance face à Amar ! Meuh !";
+                } else {
+                    resultText = this.gameOverText;
+                }
+                
+                const lines = this.wrapText(ctx, resultText, dialogWidth - 60);
                 lines.forEach((line, i) => {
                     ctx.fillText(line, dialogX + 20, dialogY + 20 + (i * 24));
                 });
-            }
-            
-            // Flèche clignotante vers le bas (style RPG)
-            if (this.waitingForDialogueInput) {
-                const arrowVisible = Math.floor(this.dialogueArrowBlinkTimer * 2) % 2 === 0;
-                if (arrowVisible) {
-                    ctx.fillStyle = '#ffffff';
-                    const arrowX = dialogX + dialogWidth - 30;
-                    const arrowY = dialogY + dialogHeight - 25;
-                    ctx.beginPath();
-                    ctx.moveTo(arrowX, arrowY);
-                    ctx.lineTo(arrowX - 8, arrowY - 8);
-                    ctx.lineTo(arrowX + 8, arrowY - 8);
-                    ctx.closePath();
-                    ctx.fill();
+                
+                // Flèche clignotante vers le bas
+                if (this.waitingForDialogueInput) {
+                    const arrowVisible = Math.floor(this.dialogueArrowBlinkTimer * 2) % 2 === 0;
+                    if (arrowVisible) {
+                        ctx.fillStyle = '#ffffff';
+                        const arrowX = dialogX + dialogWidth - 30;
+                        const arrowY = dialogY + dialogHeight - 25;
+                        ctx.beginPath();
+                        ctx.moveTo(arrowX, arrowY);
+                        ctx.lineTo(arrowX - 8, arrowY - 8);
+                        ctx.lineTo(arrowX + 8, arrowY - 8);
+                        ctx.closePath();
+                        ctx.fill();
+                    }
                 }
             }
         }
