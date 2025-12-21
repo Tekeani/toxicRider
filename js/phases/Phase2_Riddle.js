@@ -25,11 +25,11 @@ class Phase2_Riddle {
         this.dialogueCooldown = 0.3;
         this.waitingForDialogueInput = false;
         
-        // Décor
-        this.castleX = this.canvas.width / 2 - 100; // Centre du château
-        this.castleY = 50; // En haut de l'écran
-        this.castleWidth = 200;
-        this.castleHeight = 150;
+        // Décor - Château imposant comme un donjon
+        this.castleX = this.canvas.width / 2 - 200; // Centre du château (agrandi)
+        this.castleY = 20; // En haut de l'écran
+        this.castleWidth = 400; // Plus large et imposant
+        this.castleHeight = 280; // Plus haut, comme un donjon
         
         // Input handlers
         this.keydownHandler = null;
@@ -45,16 +45,19 @@ class Phase2_Riddle {
         this.player = new Player(width / 2 - 80, height / 2 + 100, this.game);
         console.log('✅ Joueur créé à la position:', this.player.x, this.player.y);
         
-        // Initialiser le PNJ (vieil homme) à côté des portes du château
-        // Le château est au centre en haut, le PNJ sera en bas, accessible depuis le sol
-        // Positionner le NPC en bas du château, mais accessible (pas dans le château)
-        const npcX = this.castleX + this.castleWidth / 2 - 24; // Centré sous les portes
-        const npcY = this.castleY + this.castleHeight + 20; // Juste en dessous du château
+        // Initialiser le PNJ (sheepman) en bas du château, accessible
+        // Positionner le NPC en bas du château pour qu'il soit accessible
+        const npcX = this.castleX + this.castleWidth / 2 - 30; // Centré devant les portes
+        const npcY = this.castleY + this.castleHeight + 30; // En bas du château, accessible
         this.npc = new NPC(npcX, npcY, this.game);
+        // Définir la taille pour le sheepman (48x64)
+        this.npc.width = 96; // 48 * 2
+        this.npc.height = 128; // 64 * 2
+        console.log('✅ NPC créé à la position:', npcX, npcY);
         // Empêcher le chargement du sprite par défaut du NPC
         this.npc._loading = true;
-        // Charger le sprite du vieil homme
-        await this.loadOldManSprite();
+        // Charger le sprite du sheepman
+        await this.loadSheepmanSprite();
         
         // Démarrer la transition
         this.transitionActive = true;
@@ -66,7 +69,7 @@ class Phase2_Riddle {
         console.log('✅ Phase2_Riddle initialisée complètement');
     }
     
-    async loadOldManSprite() {
+    async loadSheepmanSprite() {
         return new Promise((resolve, reject) => {
             // Empêcher le chargement du sprite par défaut
             this.npc._loading = true;
@@ -75,22 +78,40 @@ class Phase2_Riddle {
             const img = new Image();
             img.onload = () => {
                 if (img.complete && img.naturalWidth > 0) {
-                    // Le sprite du vieil homme est en 32x32 pixels
-                    this.npc.spriteSheet = new SpriteSheet(img, 32, 32);
-                    this.npc.spriteSheet.framesPerRow = Math.floor(img.width / 32);
-                    this.npc.setupAnimations();
+                    console.log('✅ Image sheepman chargée:', img.width, 'x', img.height);
+                    
+                    // Le sprite sheepman est en 48x64 pixels
+                    // 12 frames (3 par direction N/E/S/W)
+                    this.npc.spriteSheet = new SpriteSheet(img, 48, 64);
+                    this.npc.spriteSheet.framesPerRow = Math.floor(img.width / 48);
+                    
+                    // Configuration des animations pour le sheepman
+                    // 12 frames: 3 frames par direction (N/E/S/W)
+                    // Frame 0-2: North (haut)
+                    // Frame 3-5: East (droite)
+                    // Frame 6-8: South (bas) - direction par défaut
+                    // Frame 9-11: West (gauche)
+                    // Utiliser la première frame de la direction sud (face au joueur) pour idle
+                    this.npc.animations = {
+                        idle: new Animation(this.npc.spriteSheet, [6], 1, true) // Frame 6 = South, frame 0
+                        // Pourrait ajouter walk plus tard avec [6, 7, 8] si nécessaire
+                    };
+                    
+                    this.npc.currentAnimation = this.npc.animations.idle;
+                    this.npc.currentAnimation.play();
+                    
                     this.npc.spriteLoaded = true;
                     this.npc._loading = false;
-                    console.log('✅ Sprite vieil homme chargé');
+                    console.log('✅ Sprite sheepman chargé');
                     resolve();
                 }
             };
             img.onerror = () => {
-                console.error('❌ Erreur chargement sprite vieil homme');
+                console.error('❌ Erreur chargement sprite sheepman');
                 this.npc._loading = false;
                 reject();
             };
-            img.src = 'assets/images/sprites/npc/oldman.png';
+            img.src = 'assets/images/sprites/npc/PNG/48x64/sheepman.png';
         });
     }
     
@@ -232,17 +253,6 @@ class Phase2_Riddle {
                 this.player.x = oldX;
                 this.player.y = oldY;
             }
-            
-            // Vérifier si le joueur est près du NPC et appuie sur Entrer/E pour parler
-            if (this.isPlayerNearNPC() && (keys['Enter'] || keys['e'] || keys['E'])) {
-                if (!this.dialogueActive) {
-                    this.dialogueActive = true;
-                    this.dialogueIndex = 0;
-                    this.dialogueCooldown = 0.3;
-                    this.waitingForDialogueInput = false;
-                    console.log('💬 Début du dialogue avec le vieil homme');
-                }
-            }
         }
         
         // Mise à jour du PNJ
@@ -335,50 +345,73 @@ class Phase2_Riddle {
             drawSimpleTree(tree.x, tree.y);
         });
         
-        // ========== CHÂTEAU (pixel art style rétro) ==========
+        // ========== CHÂTEAU / DONJON (pixel art style rétro - imposant) ==========
         ctx.fillStyle = '#696969'; // Gris foncé pour les murs
-        // Corps principal du château
-        ctx.fillRect(this.castleX, this.castleY + 50, this.castleWidth, 100);
+        // Corps principal du château (plus grand)
+        const mainBodyHeight = 200;
+        ctx.fillRect(this.castleX, this.castleY + 80, this.castleWidth, mainBodyHeight);
         
-        // Tours latérales (plus hautes)
-        const towerWidth = 40;
-        const towerHeight = 120;
-        // Tour gauche
-        ctx.fillRect(this.castleX - 20, this.castleY + 30, towerWidth, towerHeight);
-        // Tour droite
-        ctx.fillRect(this.castleX + this.castleWidth - 20, this.castleY + 30, towerWidth, towerHeight);
+        // Tours latérales (beaucoup plus hautes et imposantes)
+        const towerWidth = 60;
+        const towerHeight = 200;
+        // Tour gauche (plus large)
+        ctx.fillRect(this.castleX - 30, this.castleY + 40, towerWidth, towerHeight);
+        // Tour droite (plus large)
+        ctx.fillRect(this.castleX + this.castleWidth - 30, this.castleY + 40, towerWidth, towerHeight);
         
-        // Créneaux (en haut)
+        // Tour centrale (donjon style)
+        const centerTowerWidth = 80;
+        const centerTowerHeight = 240;
+        const centerTowerX = this.castleX + this.castleWidth / 2 - centerTowerWidth / 2;
+        ctx.fillRect(centerTowerX, this.castleY + 20, centerTowerWidth, centerTowerHeight);
+        
+        // Créneaux (en haut) - plus grands
         ctx.fillStyle = '#555555';
-        const battlementWidth = 20;
-        const battlementHeight = 20;
+        const battlementWidth = 30;
+        const battlementHeight = 25;
         // Créneaux sur le corps principal
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < Math.floor(this.castleWidth / battlementWidth); i++) {
             const x = this.castleX + i * battlementWidth;
             if (i % 2 === 0) { // Un créneau sur deux
-                ctx.fillRect(x, this.castleY + 50, battlementWidth, battlementHeight);
+                ctx.fillRect(x, this.castleY + 80, battlementWidth, battlementHeight);
             }
         }
         // Créneaux sur la tour gauche
-        ctx.fillRect(this.castleX - 20, this.castleY + 30, battlementWidth, battlementHeight);
-        ctx.fillRect(this.castleX, this.castleY + 30, battlementWidth, battlementHeight);
+        ctx.fillRect(this.castleX - 30, this.castleY + 40, battlementWidth, battlementHeight);
+        ctx.fillRect(this.castleX, this.castleY + 40, battlementWidth, battlementHeight);
         // Créneaux sur la tour droite
-        ctx.fillRect(this.castleX + this.castleWidth - 40, this.castleY + 30, battlementWidth, battlementHeight);
-        ctx.fillRect(this.castleX + this.castleWidth - 20, this.castleY + 30, battlementWidth, battlementHeight);
+        ctx.fillRect(this.castleX + this.castleWidth - 60, this.castleY + 40, battlementWidth, battlementHeight);
+        ctx.fillRect(this.castleX + this.castleWidth - 30, this.castleY + 40, battlementWidth, battlementHeight);
+        // Créneaux sur la tour centrale
+        ctx.fillRect(centerTowerX, this.castleY + 20, battlementWidth, battlementHeight);
+        ctx.fillRect(centerTowerX + centerTowerWidth - battlementWidth, this.castleY + 20, battlementWidth, battlementHeight);
         
-        // Portes (fermées) - au centre du château
+        // Détails supplémentaires pour rendre plus imposant
+        ctx.fillStyle = '#4a4a4a'; // Plus foncé pour les ombres
+        // Ombre sur le côté gauche
+        ctx.fillRect(this.castleX, this.castleY + 80, 10, mainBodyHeight);
+        // Ombre sur la tour gauche
+        ctx.fillRect(this.castleX - 30, this.castleY + 40, 10, towerHeight);
+        
+        // Portes (fermées) - plus grandes et imposantes au centre
         ctx.fillStyle = '#2F1B14'; // Brun foncé pour les portes
-        const doorWidth = 40;
-        const doorHeight = 80;
+        const doorWidth = 60;
+        const doorHeight = 120;
         const doorX = this.castleX + this.castleWidth / 2 - doorWidth / 2;
-        const doorY = this.castleY + 70;
+        const doorY = this.castleY + 240; // Position plus basse pour les portes
         ctx.fillRect(doorX, doorY, doorWidth, doorHeight);
         
-        // Détails des portes (fermeture)
+        // Détails des portes (fermeture) - plus épais
         ctx.fillStyle = '#1a1008';
-        ctx.fillRect(doorX + 5, doorY + 10, 5, 60); // Barre verticale gauche
-        ctx.fillRect(doorX + doorWidth - 10, doorY + 10, 5, 60); // Barre verticale droite
-        ctx.fillRect(doorX + 5, doorY + 30, doorWidth - 10, 5); // Barre horizontale
+        ctx.fillRect(doorX + 8, doorY + 15, 8, 90); // Barre verticale gauche
+        ctx.fillRect(doorX + doorWidth - 16, doorY + 15, 8, 90); // Barre verticale droite
+        ctx.fillRect(doorX + 8, doorY + 50, doorWidth - 16, 8); // Barre horizontale haute
+        ctx.fillRect(doorX + 8, doorY + 80, doorWidth - 16, 8); // Barre horizontale basse
+        
+        // Renforts métalliques sur les portes
+        ctx.fillStyle = '#555555';
+        ctx.fillRect(doorX + 10, doorY + 20, 4, 100);
+        ctx.fillRect(doorX + doorWidth - 14, doorY + 20, 4, 100);
         
         // ========== PNJ (vieil homme) ==========
         if (this.npc) {
