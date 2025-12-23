@@ -57,9 +57,10 @@ class Phase2_Riddle {
         this.gameOverText = "BWAHAHAHAHA ! Retour à la case départ sale nigaud !";
         this.buttonPressed = false;
         
-        // État transition vers boss (écran noir)
+        // État transition vers boss (fondu noir cinématique)
         this.bossTransitionActive = false;
         this.bossTransitionTimer = 0;
+        this.bossTransitionDuration = 1.0; // 1 seconde de fondu
         
         // Décor - Château imposant comme un donjon
         this.castleX = this.canvas.width / 2 - 200; // Centre du château (agrandi)
@@ -471,12 +472,17 @@ class Phase2_Riddle {
             return;
         }
         
-        // Gérer la transition vers le boss (passage immédiat, sans écran noir)
+        // Gérer la transition cinématique vers le boss (fondu noir)
         if (this.bossTransitionActive) {
-            console.log('🔄 Transition vers Phase3_Boss');
-            this.cleanup();
-            this.game.nextPhase();
-            return;
+            this.bossTransitionTimer += deltaTime;
+            
+            // Quand le fondu est complet (écran noir), passer à la phase suivante
+            if (this.bossTransitionTimer >= this.bossTransitionDuration) {
+                console.log('✅ Transition terminée, passage à Phase3_Boss');
+                this.cleanup();
+                this.game.nextPhase();
+            }
+            return; // Ne pas mettre à jour le jeu pendant la transition
         }
         
         // Gérer le dialogue
@@ -606,12 +612,6 @@ class Phase2_Riddle {
                 }
             }
             
-            return;
-        }
-        
-        // ========== TRANSITION VERS BOSS (pas d'écran noir, passage direct) ==========
-        if (this.bossTransitionActive) {
-            // Ne rien dessiner, la transition se fait immédiatement
             return;
         }
         
@@ -975,6 +975,13 @@ class Phase2_Riddle {
                     }
                 }
             }
+        }
+        
+        // Transition cinématique vers Phase3 (fondu noir) - dessiné en dernier
+        if (this.bossTransitionActive) {
+            const fadeProgress = Math.min(1, this.bossTransitionTimer / this.bossTransitionDuration);
+            ctx.fillStyle = `rgba(0, 0, 0, ${fadeProgress})`;
+            ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         }
     }
     

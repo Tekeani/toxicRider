@@ -103,6 +103,8 @@ class Phase3_Boss {
         this.bossTalkTimer = 0;
         this.heartPulseTime = 0;
         this.resultMessage = null;
+        this.resultTimer = 0; // Timer pour la transition automatique après le résultat
+        this.resultDuration = 2.0; // 2 secondes d'affichage du résultat avant transition
         this.cageFadeOutProgress = 0; // Progression de la disparition de la cage (0 à 1)
         this.cageFadeOutSpeed = 0.02; // Vitesse de disparition
     }
@@ -133,6 +135,7 @@ class Phase3_Boss {
         this.bossTalkTimer = 0;
         this.heartPulseTime = 0;
         this.resultMessage = null;
+        this.resultTimer = 0; // Réinitialiser le timer de résultat
         this.introDialogueComplete = false;
         this.victoryDialogueComplete = false;
         this.defeatDialogueComplete = false;
@@ -298,12 +301,7 @@ class Phase3_Boss {
                 return;
             }
             
-            // Gérer la transition après résultat
-            if (this.battleState === 'result' && (e.key === 'Enter' || e.key === 'e' || e.key === 'E') && !this._interactPressed) {
-                e.preventDefault();
-                this._interactPressed = true;
-                this.nextTurn();
-            }
+            // Plus besoin de gérer Entrée pour le résultat - transition automatique
         };
         
         this.keyupHandler = (e) => {
@@ -372,6 +370,7 @@ class Phase3_Boss {
             console.log('✅ Bonne réponse ! Boss prend 10 dégâts. HP restants:', this.bossHp);
             this.battleState = 'result';
             this.resultMessage = `C'est très efficace !`;
+            this.resultTimer = 0; // Réinitialiser le timer
             
             // Vérifier si le boss est KO
             if (this.bossHp <= 0) {
@@ -384,6 +383,7 @@ class Phase3_Boss {
             console.log('❌ Mauvaise réponse ! Joueur prend 20 dégâts. HP restants:', this.game.playerData.hp);
             this.battleState = 'result';
             this.resultMessage = `Cela ne semble pas assez toxique...`;
+            this.resultTimer = 0; // Réinitialiser le timer
             
             // Vérifier si le joueur est KO
             if (this.game.playerData.hp <= 0) {
@@ -493,7 +493,14 @@ class Phase3_Boss {
                 this.player.currentAnimation.update(deltaTime);
             }
             
-            // Pas de timer automatique - le joueur doit appuyer sur Entrée/E pour passer aux choix
+            // Gérer la transition automatique après le résultat (sans appui sur Entrée)
+            if (this.battleState === 'result') {
+                this.resultTimer += deltaTime;
+                if (this.resultTimer >= this.resultDuration) {
+                    this.resultTimer = 0;
+                    this.nextTurn();
+                }
+            }
             
             return; // NE PAS permettre le mouvement
         }
@@ -777,7 +784,7 @@ class Phase3_Boss {
         } else if (this.battleState === 'boss_talk') {
             // Le boss parle (phrase d'attaque)
             const currentPhrase = this.bossPhrases[this.currentTurn];
-            ctx.fillText(`AMAR: ${currentPhrase.text}`, dialogX + 20, dialogY + 20);
+            ctx.fillText(`Amar: ${currentPhrase.text}`, dialogX + 20, dialogY + 20);
             
             // Flèche clignotante pour indiquer qu'on peut appuyer sur Entrée
             const arrowVisible = Math.floor(this.dialogueArrowBlinkTimer * 2) % 2 === 0;
@@ -832,21 +839,7 @@ class Phase3_Boss {
         } else if (this.battleState === 'result') {
             // Résultat du tour
             ctx.fillText(this.resultMessage || '...', dialogX + 20, dialogY + 20);
-            ctx.fillText('Appuyez sur Entrée pour continuer', dialogX + 20, dialogY + 60);
-            
-            // Flèche clignotante
-            const arrowVisible = Math.floor(this.dialogueArrowBlinkTimer * 2) % 2 === 0;
-            if (arrowVisible) {
-                ctx.fillStyle = '#ffffff';
-                const arrowX = dialogX + dialogWidth - 30;
-                const arrowY = dialogY + dialogHeight - 25;
-                ctx.beginPath();
-                ctx.moveTo(arrowX, arrowY);
-                ctx.lineTo(arrowX - 8, arrowY - 8);
-                ctx.lineTo(arrowX + 8, arrowY - 8);
-                ctx.closePath();
-                ctx.fill();
-            }
+            // Pas de texte "Appuyez sur Entrée" - la transition se fait automatiquement après un court délai
         }
     }
     
@@ -930,7 +923,7 @@ class Phase3_Boss {
         } else if (this.battleState === 'result') {
             // Résultat du tour
             ctx.fillText(this.resultMessage || '...', dialogX + 20, dialogY + 20);
-            ctx.fillText('Appuyez sur Entrée pour continuer', dialogX + 20, dialogY + 80);
+            // Pas de texte "Appuyez sur Entrée" - la transition se fait automatiquement après un court délai
         }
     }
     
