@@ -1,5 +1,5 @@
 class NPC {
-    constructor(x, y, game) {
+    constructor(x, y, game, skipAutoLoad = false) {
         this.x = x;
         this.y = y;
         this.game = game;
@@ -19,7 +19,14 @@ class NPC {
         this.targetY = null;
         this.hasReachedTarget = false;
         
-        this.loadSprite();
+        // Si skipAutoLoad est true, ne pas charger automatiquement le sprite par défaut
+        // Utilisé par Phase2_Riddle pour charger uniquement le sheepman
+        if (!skipAutoLoad) {
+            this.loadSprite();
+        } else {
+            // Bloquer le chargement pour permettre un chargement personnalisé
+            this._loading = true;
+        }
     }
 
     async loadSprite() {

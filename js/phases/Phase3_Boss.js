@@ -18,12 +18,16 @@ class Phase3_Boss {
         this.bossSpriteLoaded = false;
         this.bikeSpriteLoaded = false;
         
-        // Position de la cage et de la moto
+        // Position de la cage et de la moto (en haut de l'écran)
         this.cageX = this.canvas.width / 2 - 100;
-        this.cageY = this.canvas.height / 2 - 100;
+        this.cageY = 50; // En haut de l'écran
         this.cageWidth = 200;
         this.cageHeight = 150;
         this.cageVisible = true;
+        
+        // Position du boss (cœur) au milieu-haut de l'écran (sous la cage)
+        this.bossX = this.canvas.width / 2;
+        this.bossY = this.canvas.height / 2 - 100; // Remonté de 100 pixels
         
         // Dialogue d'introduction
         this.introDialogueLines = [
@@ -125,6 +129,11 @@ class Phase3_Boss {
         this.waitingForDialogueInput = false;
         this.dialogueArrowBlinkTimer = 0;
         
+        // Réinitialiser les positions
+        this.cageY = 50; // Cage en haut
+        this.bossX = this.canvas.width / 2; // Boss au milieu horizontal
+        this.bossY = this.canvas.height / 2 - 100; // Boss remonté (sous la cage)
+        
         // Charger les sprites
         await this.loadSprites();
         
@@ -140,28 +149,64 @@ class Phase3_Boss {
             bossImg.onload = () => {
                 this.bossSprite = bossImg;
                 this.bossSpriteLoaded = true;
-                console.log('✅ Sprite boss (cœur) chargé');
+                console.log('✅ Sprite boss (cœur) chargé:', bossImg.width, 'x', bossImg.height);
                 
                 // Charger le sprite de la moto
                 const bikeImg = new Image();
+                
                 bikeImg.onload = () => {
-                    this.bikeSprite = bikeImg;
-                    this.bikeSpriteLoaded = true;
-                    console.log('✅ Sprite moto chargé');
+                    console.log('🏍️ Image moto onload déclenché');
+                    console.log('  - Dimensions:', bikeImg.width, 'x', bikeImg.height);
+                    console.log('  - Complete:', bikeImg.complete);
+                    console.log('  - naturalWidth:', bikeImg.naturalWidth);
+                    
+                    // Vérifier que l'image est vraiment chargée
+                    if (bikeImg.complete && bikeImg.naturalWidth > 0) {
+                        this.bikeSprite = bikeImg;
+                        this.bikeSpriteLoaded = true;
+                        console.log('✅ Sprite moto chargé avec succès !');
+                    } else {
+                        console.error('❌ Image moto onload mais pas complete ou naturalWidth = 0');
+                        this.bikeSpriteLoaded = false;
+                    }
                     resolve();
                 };
-                bikeImg.onerror = () => {
-                    console.warn('⚠️ Impossible de charger le sprite de la moto');
+                
+                bikeImg.onerror = (e) => {
+                    console.error('❌ Erreur chargement sprite moto:', e);
+                    console.error('  - URL tentée:', bikeImg.src);
                     this.bikeSpriteLoaded = false;
                     resolve();
                 };
-                bikeImg.src = 'assets/images/sprites/vehicles/spr_bike1_0.png';
+                
+                // Définir la source APRÈS avoir défini les handlers
+                const bikePath = 'assets/images/sprites/vehicles/spr_bike_0.png';
+                console.log('🔄 Tentative de chargement moto:', bikePath);
+                bikeImg.src = bikePath;
             };
-            bossImg.onerror = () => {
-                console.warn('⚠️ Impossible de charger le sprite du boss');
+            
+            bossImg.onerror = (e) => {
+                console.error('❌ Erreur chargement sprite boss:', e);
+                console.error('  - URL tentée:', bossImg.src);
                 this.bossSpriteLoaded = false;
-                resolve();
+                
+                // Même si le boss ne charge pas, essayer de charger la moto
+                const bikeImg = new Image();
+                bikeImg.onload = () => {
+                    if (bikeImg.complete && bikeImg.naturalWidth > 0) {
+                        this.bikeSprite = bikeImg;
+                        this.bikeSpriteLoaded = true;
+                        console.log('✅ Sprite moto chargé (malgré échec boss)');
+                    }
+                    resolve();
+                };
+                bikeImg.onerror = () => {
+                    console.error('❌ Erreur chargement sprite moto (après échec boss)');
+                    resolve();
+                };
+                bikeImg.src = 'assets/images/sprites/vehicles/spr_bike_0.png';
             };
+            
             bossImg.src = 'assets/images/sprites/boss/Heart.png';
         });
     }
@@ -427,6 +472,13 @@ class Phase3_Boss {
     }
     
     render(ctx) {
+        // DEBUG
+        if (!this._renderCallCount) this._renderCallCount = 0;
+        this._renderCallCount++;
+        if (this._renderCallCount % 60 === 0) {
+            console.log('🎨 Phase3 render() appelé', this._renderCallCount, 'fois - battleState:', this.battleState);
+        }
+        
         // Fond : sol de donjon (briques grises)
         this.renderDungeonFloor(ctx);
         
@@ -470,47 +522,85 @@ class Phase3_Boss {
     }
     
     renderScene(ctx) {
-        // Dessiner la cage (si visible)
-        if (this.cageVisible) {
-            this.renderCage(ctx);
-        }
-        
-        // Dessiner la moto derrière les barreaux (si la cage est visible) ou devant (si la cage n'est plus visible)
+        // IMPORTANT : Dessiner la moto D'ABORD (derrière les barreaux)
+        // Le sprite fait 288x189 pixels selon OpenGameArt, on va l'adapter à la taille de la cage
         if (this.bikeSpriteLoaded && this.bikeSprite) {
-            const bikeX = this.cageX + this.cageWidth / 2 - this.bikeSprite.width / 2;
-            const bikeY = this.cageY + this.cageHeight / 2 - this.bikeSprite.height / 2;
+            // Calculer la position et la taille de la moto pour qu'elle s'adapte à la cage
+            // Le sprite original fait 288x189, on va le redimensionner proportionnellement
+            const bikeDisplayWidth = this.cageWidth * 0.9; // 90% de la largeur de la cage
+            const bikeDisplayHeight = (this.bikeSprite.height / this.bikeSprite.width) * bikeDisplayWidth; // Conserver les proportions
+            const bikeX = this.cageX + this.cageWidth / 2 - bikeDisplayWidth / 2;
+            const bikeY = this.cageY + this.cageHeight / 2 - bikeDisplayHeight / 2;
             
-            ctx.drawImage(this.bikeSprite, bikeX, bikeY);
+            ctx.drawImage(this.bikeSprite, bikeX, bikeY, bikeDisplayWidth, bikeDisplayHeight);
         } else {
-            // Fallback : rectangle représentatif
+            // Fallback : rectangle représentatif (derrière les barreaux)
             ctx.fillStyle = '#666666';
             ctx.fillRect(this.cageX + this.cageWidth / 2 - 50, this.cageY + this.cageHeight / 2 - 30, 100, 60);
         }
         
-        // Dessiner le boss (cœur) devant la cage (seulement si pas en mode libre)
+        // Dessiner la cage PAR-DESSUS la moto (les barreaux apparaîtront devant)
+        if (this.cageVisible) {
+            this.renderCage(ctx);
+        }
+        
+        // Dessiner le boss (cœur) au milieu de l'écran (seulement si pas en mode libre)
         if (this.battleState !== 'victory_free' && this.battleState !== 'victory_dialogue') {
+            const bossSize = 64;
+            const pulse = 1 + Math.sin(this.heartPulseTime * 3) * 0.1;
+            
+            // Dessiner le nom et la barre de vie AVANT le cœur (pour qu'ils soient au-dessus)
+            ctx.save();
+            ctx.translate(this.bossX, this.bossY);
+            
+            // Nom du boss "Amar" au-dessus
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 18px Arial'; // Réduit de 24px à 18px
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText('Amar', 0, -bossSize / 2 - 20); // Position ajustée
+            
+            // Barre de vie sous le nom (collée au nom)
+            const barWidth = 200;
+            const barHeight = 20;
+            const barX = -barWidth / 2;
+            const barY = -bossSize / 2 + 2; // Collée au nom (seulement 2px d'espace)
+            
+            // Fond de la barre (gris foncé)
+            ctx.fillStyle = '#333333';
+            ctx.fillRect(barX, barY, barWidth, barHeight);
+            
+            // Bordure de la barre
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(barX, barY, barWidth, barHeight);
+            
+            // Barre de vie (rouge, proportionnelle aux HP)
+            const hpPercent = this.bossHp / this.bossMaxHp;
+            const hpBarWidth = barWidth * hpPercent;
+            ctx.fillStyle = '#FF0000';
+            ctx.fillRect(barX + 2, barY + 2, hpBarWidth - 4, barHeight - 4);
+            
+            // Texte des HP au centre de la barre
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`${this.bossHp} / ${this.bossMaxHp}`, 0, barY + barHeight / 2);
+            
+            ctx.restore();
+            
+            // Dessiner le cœur avec pulsation
+            ctx.save();
+            ctx.translate(this.bossX, this.bossY);
+            ctx.scale(pulse, pulse);
+            
+            // Dessiner le cœur
             if (this.bossSpriteLoaded && this.bossSprite) {
-                const bossX = this.cageX + this.cageWidth / 2 - this.bossSprite.width / 2;
-                const bossY = this.cageY - this.bossSprite.height - 20;
-                
-                // Effet de pulsation
-                const pulse = 1 + Math.sin(this.heartPulseTime * 3) * 0.1;
-                ctx.save();
-                ctx.translate(bossX + this.bossSprite.width / 2, bossY + this.bossSprite.height / 2);
-                ctx.scale(pulse, pulse);
+                // Utiliser le sprite du cœur si disponible
                 ctx.drawImage(this.bossSprite, -this.bossSprite.width / 2, -this.bossSprite.height / 2);
-                ctx.restore();
             } else {
                 // Fallback : cœur dessiné
-                const bossX = this.cageX + this.cageWidth / 2;
-                const bossY = this.cageY - 50;
-                const bossSize = 64;
-                
-                const pulse = 1 + Math.sin(this.heartPulseTime * 3) * 0.1;
-                ctx.save();
-                ctx.translate(bossX, bossY);
-                ctx.scale(pulse, pulse);
-                
                 ctx.fillStyle = '#FF0000';
                 ctx.beginPath();
                 ctx.moveTo(0, 10);
@@ -520,9 +610,27 @@ class Phase3_Boss {
                 ctx.bezierCurveTo(50, 0, 25, -10, 0, 10);
                 ctx.closePath();
                 ctx.fill();
-                
-                ctx.restore();
             }
+            
+            // Ajouter les yeux (deux petits cercles noirs) - repositionnés plus bas
+            ctx.fillStyle = '#000000';
+            // Œil gauche (positionné plus bas et centré sur le cœur)
+            ctx.beginPath();
+            ctx.arc(-12, 8, 4, 0, Math.PI * 2);
+            ctx.fill();
+            // Œil droit (positionné plus bas et centré sur le cœur)
+            ctx.beginPath();
+            ctx.arc(12, 8, 4, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Ajouter le sourire (arc) - repositionné plus bas
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(0, 22, 12, 0.2, Math.PI - 0.2, false);
+            ctx.stroke();
+            
+            ctx.restore();
         }
         
         // Dessiner le joueur (utiliser la méthode render du Player)

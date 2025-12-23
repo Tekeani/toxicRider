@@ -1,9 +1,16 @@
+// ============================================================================
+// ⚠️⚠️⚠️ PHASE2_RIDDLE - NPC SHEEPMAN UNIQUEMENT ⚠️⚠️⚠️
+// ============================================================================
+// Cette phase utilise OBLIGATOIREMENT le NPC sheepman
+// NE JAMAIS remplacer par un autre sprite (chat, oldman, etc.)
+// ============================================================================
 class Phase2_Riddle {
     constructor(game) {
         this.game = game;
         this.canvas = game.canvas;
         this.ctx = game.ctx;
         this.player = null;
+        // NPC sheepman uniquement - voir init() et loadSheepmanSprite()
         this.npc = null;
         
         // État de transition
@@ -72,7 +79,15 @@ class Phase2_Riddle {
         const width = this.canvas.width;
         const height = this.canvas.height;
         
-        // Initialiser le PNJ (sheepman) en bas du château, accessible
+        // ============================================================================
+        // ⚠️⚠️⚠️ ATTENTION CRITIQUE - NE JAMAIS CHANGER LE NPC ICI ⚠️⚠️⚠️
+        // ============================================================================
+        // CETTE PHASE UTILISE UNIQUEMENT LE NPC SHEEPMAN
+        // NE JAMAIS remplacer par un autre sprite (chat, oldman, etc.)
+        // Le sprite sheepman est OBLIGATOIRE pour cette phase
+        // ============================================================================
+        
+        // Initialiser le PNJ (SHEEPMAN UNIQUEMENT) en bas du château, accessible
         // Positionner le NPC en bas du château pour qu'il soit accessible
         const npcX = this.castleX + this.castleWidth / 2 - 30; // Centré devant les portes
         const npcY = this.castleY + this.castleHeight + 30; // En bas du château, accessible
@@ -84,18 +99,17 @@ class Phase2_Riddle {
         this.player = new Player(playerX, playerY, this.game);
         console.log('✅ Joueur créé à la position:', this.player.x, this.player.y);
         
-        // Créer le NPC et empêcher immédiatement le chargement du sprite par défaut
-        this.npc = new NPC(npcX, npcY, this.game);
-        // CRITIQUE : Empêcher le chargement du sprite par défaut AVANT qu'il ne commence
-        this.npc._loading = true;
-        this.npc.spriteLoaded = false;
-        // Annuler le spriteSheet par défaut s'il a été créé
-        this.npc.spriteSheet = null;
-        // Définir la taille pour le sheepman (48x64)
+        // CRÉER LE NPC SANS chargement automatique du sprite par défaut
+        // Le paramètre skipAutoLoad=true empêche le chargement de playersprite.png
+        // On chargera UNIQUEMENT le sheepman ensuite
+        this.npc = new NPC(npcX, npcY, this.game, true); // skipAutoLoad = true
+        
+        // Définir la taille pour le SHEEPMAN (48x64 pixels, agrandi x2)
         this.npc.width = 96; // 48 * 2
         this.npc.height = 128; // 64 * 2
         console.log('✅ NPC créé à la position:', npcX, npcY);
-        // Charger le sprite du sheepman
+        
+        // Charger UNIQUEMENT le sprite SHEEPMAN (pas de chat, pas d'oldman, SHEEPMAN SEULEMENT)
         await this.loadSheepmanSprite();
         
         // Démarrer la transition
@@ -105,34 +119,42 @@ class Phase2_Riddle {
         
         this.setupInput();
         
-        console.log('✅ Phase2_Riddle initialisée complètement');
+        console.log('✅ Phase2_Riddle initialisée complètement avec SHEEPMAN');
     }
     
+    // ============================================================================
+    // ⚠️⚠️⚠️ MÉTHODE CRITIQUE - NE JAMAIS MODIFIER OU REMPLACER ⚠️⚠️⚠️
+    // ============================================================================
+    // Cette méthode charge UNIQUEMENT le sprite SHEEPMAN pour Phase2_Riddle
+    // NE JAMAIS remplacer par loadOldManSprite(), loadCatSprite(), ou autre
+    // Le NPC sheepman est OBLIGATOIRE pour cette phase
+    // ============================================================================
     async loadSheepmanSprite() {
         return new Promise((resolve, reject) => {
-            // CRITIQUE : Empêcher complètement le chargement du sprite par défaut
-            // Annuler toute tentative de chargement du sprite par défaut
-            this.npc._loading = true;
-            this.npc.spriteLoaded = false;
-            this.npc.spriteSheet = null;
-            this.npc.animations = {};
-            this.npc.currentAnimation = null;
+            // ÉTAPE 1 : Annuler COMPLÈTEMENT tout sprite par défaut qui pourrait être chargé
+            // Cette étape est CRITIQUE pour empêcher le chargement du sprite par défaut (playersprite.png)
+            this.npc._loading = true; // Bloquer tout autre chargement
+            this.npc.spriteLoaded = false; // Forcer l'état "non chargé"
+            this.npc.spriteSheet = null; // Supprimer complètement le spriteSheet par défaut
+            this.npc.animations = {}; // Vider toutes les animations par défaut
+            this.npc.currentAnimation = null; // Annuler l'animation par défaut
             
+            // ÉTAPE 2 : Charger UNIQUEMENT le sprite SHEEPMAN (pas de chat, pas d'oldman)
             const img = new Image();
             img.onload = () => {
                 if (img.complete && img.naturalWidth > 0) {
-                    console.log('✅ Image sheepman chargée:', img.width, 'x', img.height);
+                    console.log('✅ Image SHEEPMAN chargée:', img.width, 'x', img.height);
                     
-                    // Le sprite sheepman est en 48x64 pixels
-                    // 12 frames (3 par direction N/E/S/W)
+                    // Le sprite SHEEPMAN est en 48x64 pixels
+                    // 12 frames au total (3 frames par direction : N/E/S/W)
                     this.npc.spriteSheet = new SpriteSheet(img, 48, 64);
                     this.npc.spriteSheet.framesPerRow = Math.floor(img.width / 48);
                     
-                    // Configuration des animations pour le sheepman
+                    // Configuration des animations pour le SHEEPMAN UNIQUEMENT
                     // 12 frames: 3 frames par direction (N/E/S/W)
                     // Frame 0-2: North (haut)
                     // Frame 3-5: East (droite)
-                    // Frame 6-8: South (bas) - direction par défaut
+                    // Frame 6-8: South (bas) - direction par défaut face au joueur
                     // Frame 9-11: West (gauche)
                     // Utiliser la première frame de la direction sud (face au joueur) pour idle
                     this.npc.animations = {
@@ -140,20 +162,24 @@ class Phase2_Riddle {
                         // Pourrait ajouter walk plus tard avec [6, 7, 8] si nécessaire
                     };
                     
+                    // Activer l'animation idle du SHEEPMAN
                     this.npc.currentAnimation = this.npc.animations.idle;
                     this.npc.currentAnimation.play();
                     
+                    // Finaliser le chargement
                     this.npc.spriteLoaded = true;
                     this.npc._loading = false;
-                    console.log('✅ Sprite sheepman chargé et configuré');
+                    console.log('✅ Sprite SHEEPMAN chargé et configuré correctement');
                     resolve();
                 }
             };
             img.onerror = () => {
-                console.error('❌ Erreur chargement sprite sheepman');
+                console.error('❌ Erreur chargement sprite SHEEPMAN - Le fichier sheepman.png est introuvable');
                 this.npc._loading = false;
                 reject();
             };
+            // CHEMIN OBLIGATOIRE : assets/images/sprites/npc/PNG/48x64/sheepman.png
+            // NE JAMAIS changer ce chemin pour un autre sprite
             img.src = 'assets/images/sprites/npc/PNG/48x64/sheepman.png';
         });
     }
@@ -418,6 +444,20 @@ class Phase2_Riddle {
             return;
         }
         
+        // Gérer la transition vers le boss
+        if (this.bossTransitionActive) {
+            this.bossTransitionTimer += deltaTime;
+            
+            // Après 2 secondes d'écran noir, passer à la phase boss
+            if (this.bossTransitionTimer >= 2) {
+                console.log('🔄 Transition vers Phase3_Boss');
+                this.cleanup();
+                this.game.nextPhase();
+            }
+            
+            return;
+        }
+        
         // Gérer le dialogue
         if (this.dialogueActive) {
             this.dialogueArrowBlinkTimer += deltaTime;
@@ -511,7 +551,7 @@ class Phase2_Riddle {
             }
         }
         
-        // Mise à jour du PNJ (sheepman)
+        // Mise à jour du PNJ (SHEEPMAN UNIQUEMENT - ne pas changer)
         if (this.npc) {
             this.npc.update(deltaTime);
         }
@@ -717,7 +757,7 @@ class Phase2_Riddle {
         ctx.fillRect(doorX + 10, doorY + 20, 4, 100);
         ctx.fillRect(doorX + doorWidth - 14, doorY + 20, 4, 100);
         
-        // ========== PNJ (sheepman) ==========
+        // ========== PNJ (SHEEPMAN UNIQUEMENT - ne pas changer) ==========
         if (this.npc) {
             this.npc.render(ctx);
         }
