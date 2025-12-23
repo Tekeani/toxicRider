@@ -32,6 +32,7 @@ class Phase1_Roguelike {
         this.waveStartDelay = 5; // 5 secondes d'attente
         this.enemyAttackCooldown = 0; // Cooldown global pour attaques des ennemis
         this.enemyAttackIndex = 0; // Index de l'ennemi qui attaque actuellement
+        this._waveHasBeenSpawned = false; // Flag pour savoir si une vague a été lancée au moins une fois
         this._attackPressed = false;
         this._toxicityPressed = false;
         this.upgradeMenuActive = false;
@@ -77,6 +78,7 @@ class Phase1_Roguelike {
 
         // Démarrage du compte à rebours pour la première vague
         this.waveStartTimer = this.waveStartDelay;
+        this._waveHasBeenSpawned = false; // Réinitialiser le flag
         console.log('⏰ Démarrage du compte à rebours de la vague ennemie (5 secondes)');
         
         console.log('✅ Phase1_Roguelike initialisée complètement');
@@ -410,6 +412,7 @@ class Phase1_Roguelike {
         
         // Sinon, démarrer le décompte pour la prochaine vague
         this.waveStartTimer = this.waveStartDelay;
+        this._waveHasBeenSpawned = false; // Réinitialiser le flag pour la nouvelle vague
         console.log('⏰ Démarrage du décompte pour la vague', this.currentWave + 1);
     }
 
@@ -434,6 +437,7 @@ class Phase1_Roguelike {
                     // Lancer la vague
                     this.spawnWave();
                     this.waveStartTimer = 0;
+                    this._waveHasBeenSpawned = true; // Marquer qu'une vague a été lancée
                 }
             }
         }
@@ -554,9 +558,20 @@ class Phase1_Roguelike {
         }
 
         // Vérifier si tous les ennemis sont morts et afficher le menu d'amélioration
-        if (this.enemies.length === 0 && !this.allWavesComplete && this.currentWave < this.waves.length && !this.upgradeMenuActive && this.waveStartTimer <= 0) {
+        // IMPORTANT : Vérifier que waveStartTimer === 0 (et pas <= 0) pour s'assurer qu'une vague a déjà été lancée
+        // et qu'on n'est plus en train d'attendre le démarrage initial
+        if (this.enemies.length === 0 && !this.allWavesComplete && this.currentWave < this.waves.length && !this.upgradeMenuActive && this.waveStartTimer === 0) {
+            // Vérifier qu'au moins une vague a été lancée en vérifiant que currentWave > 0 OU que le timer a vraiment fini
+            // Pour éviter d'activer le menu au démarrage quand enemies est vide mais qu'aucune vague n'a encore été lancée
+            // On utilise une variable pour tracker si une vague a été lancée
+            if (!this._waveHasBeenSpawned) {
+                // C'est la première fois, on attend que spawnWave() soit appelé
+                return;
+            }
+            
             // Tous les ennemis sont morts, activer le menu d'amélioration
             this.upgradeMenuActive = true;
+            this._waveHasBeenSpawned = false; // Réinitialiser pour la prochaine vague
             console.log('✅ Tous les ennemis sont morts, affichage du menu d\'amélioration');
         }
 
@@ -913,6 +928,7 @@ class Phase1_Roguelike {
         this.usedInsults = []; // Réinitialiser les insultes utilisées
         this.enemyAttackIndex = 0;
         this.enemyAttackCooldown = 0;
+        this._waveHasBeenSpawned = false; // Réinitialiser le flag
         
         // Repositionner le joueur
         const width = this.canvas.width;

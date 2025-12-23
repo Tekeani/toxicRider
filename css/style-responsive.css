@@ -1,0 +1,99 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background-color: #1a1a1a;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+}
+
+#game-container {
+    position: relative;
+    display: inline-block;
+    width: 100%;
+    height: 100vh;
+    max-width: 1024px;
+    max-height: 768px;
+}
+
+#gameCanvas {
+    display: block;
+    border: 2px solid #333;
+    background-color: #000;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
+#player-stats {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 10px;
+    border-radius: 5px;
+    min-width: 200px;
+    z-index: 10;
+}
+
+.stat-bar {
+    margin-bottom: 8px;
+}
+
+.stat-bar:last-child {
+    margin-bottom: 0;
+}
+
+.stat-bar label {
+    display: block;
+    color: #fff;
+    font-size: 12px;
+    margin-bottom: 4px;
+    font-weight: bold;
+}
+
+.bar-container {
+    width: 100%;
+    height: 20px;
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+    overflow: visible;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    position: relative;
+}
+
+.bar {
+    height: 100%;
+    transition: width 0.3s ease;
+    border-radius: 3px;
+}
+
+.hp-bar {
+    background: linear-gradient(90deg, #ff4444, #ff6666);
+}
+
+.tp-bar {
+    background: linear-gradient(90deg, #44ff44, #66ff66);
+}
+
+.bar-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #fff;
+    font-size: 11px;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+    pointer-events: none;
+    z-index: 1;
+}
+

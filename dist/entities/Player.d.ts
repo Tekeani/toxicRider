@@ -1,0 +1,51 @@
+import { Entity } from './Entity';
+import { SpriteSheet } from '../utils/SpriteSheet';
+import { Animation } from '../utils/Animation';
+import type { RenderableEntity } from '../systems/RenderingSystem';
+import type { Game } from '../core/Game';
+export declare class Player extends Entity implements RenderableEntity {
+    private game;
+    private spriteSheet;
+    private currentAnimation;
+    private animations;
+    private spriteLoaded;
+    speed: number;
+    isMoving: boolean;
+    isAttacking: boolean;
+    attackTimer: number;
+    private _damageApplied;
+    isBlocking: boolean;
+    isTakingDamage: boolean;
+    damageTimer: number;
+    mana: number;
+    maxMana: number;
+    toxicityCooldown: number;
+    toxicityCooldownMax: number;
+    private _attackDirection;
+    private spriteWidth;
+    private spriteHeight;
+    constructor(x: number, y: number, game: Game);
+    loadSprite(): Promise<void>;
+    private setupAnimations;
+    private switchAnimation;
+    update(deltaTime: number, keys?: Record<string, boolean>): void;
+    attack(): void;
+    block(blocking: boolean): void;
+    useToxicity(): boolean;
+    getSpriteSheet(): SpriteSheet | null;
+    getCurrentAnimation(): Animation | null;
+    shouldFlipX(): boolean;
+    getStats(): {
+        hp: number;
+        maxHp: number;
+        strength: number;
+        toxicity: number;
+        endurance: number;
+    };
+    takeDamage(amount: number): void;
+    heal(amount: number): void;
+    isDeathAnimationComplete(): boolean;
+    getDamageApplied(): boolean;
+    setDamageApplied(value: boolean): void;
+}
+//# sourceMappingURL=Player.d.ts.map
