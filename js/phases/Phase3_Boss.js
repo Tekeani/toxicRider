@@ -31,7 +31,7 @@ class Phase3_Boss {
         
         // Dialogue d'introduction
         this.introDialogueLines = [
-            "Je suis la puissante Amar ! Tu ne pourras pas vaincre mon amour pour toi !"
+            "Je suis la puissante Amar ! Inutile de te dérober maintenant que je détiens ta précieuse moto ! Tu ne pourras plus fuir mon amour pour toi !"
         ];
         this.introDialogueTimer = 0;
         this.introDialogueComplete = false;
@@ -46,7 +46,7 @@ class Phase3_Boss {
         
         // Dialogue de défaite
         this.defeatDialogueLines = [
-            "HAHAHA ! Je le savais ! Tu m'aimes donc ! Allons nous marier !"
+            "HA-HA ! Je le savais ! Tu m'aimes ! Allons donc vivre ensemble, nous marier et adopter plein de mignons petits chats ! Sans oublier tous les beaux voyages que je nous prévois. Viens !"
         ];
         this.defeatDialogueComplete = false;
         
@@ -103,6 +103,8 @@ class Phase3_Boss {
         this.bossTalkTimer = 0;
         this.heartPulseTime = 0;
         this.resultMessage = null;
+        this.cageFadeOutProgress = 0; // Progression de la disparition de la cage (0 à 1)
+        this.cageFadeOutSpeed = 0.02; // Vitesse de disparition
     }
     
     async init() {
@@ -135,8 +137,10 @@ class Phase3_Boss {
         this.victoryDialogueComplete = false;
         this.defeatDialogueComplete = false;
         this.cageVisible = true;
-        this.waitingForDialogueInput = false;
+        this.waitingForDialogueInput = true; // Activer immédiatement le dialogue
         this.dialogueArrowBlinkTimer = 0;
+        this.introDialogueTimer = 0; // Réinitialiser le timer
+        this.cageFadeOutProgress = 0; // Réinitialiser la progression du fondu de la cage
         
         // Charger les sprites
         await this.loadSprites();
@@ -234,7 +238,8 @@ class Phase3_Boss {
                 this._interactPressed = true;
                 this.victoryDialogueComplete = true;
                 this.waitingForDialogueInput = false;
-                this.cageVisible = false;
+                // Commencer la disparition cinématique de la cage
+                this.cageFadeOutProgress = 0;
                 this.battleState = 'victory_free';
                 return;
             }
@@ -249,19 +254,31 @@ class Phase3_Boss {
                 return;
             }
             
-            // Gérer l'interaction avec la moto en mode libre
-            if (this.battleState === 'victory_free' && (e.key === 'Enter' || e.key === 'e' || e.key === 'E') && !this._interactPressed) {
+            // Gérer l'interaction avec la moto en mode libre (après disparition de la cage)
+            if (this.battleState === 'victory_free' && !this.cageVisible && (e.key === 'Enter' || e.key === 'e' || e.key === 'E') && !this._interactPressed) {
                 e.preventDefault();
                 this._interactPressed = true;
-                // Vérifier si le joueur est proche de la moto
+                // Vérifier si le joueur est proche de la moto (position de la moto = ancienne position de la cage)
                 const bikeX = this.cageX + this.cageWidth / 2;
                 const bikeY = this.cageY + this.cageHeight / 2;
-                const distance = Math.sqrt(Math.pow(this.player.x + this.player.width/2 - bikeX, 2) + Math.pow(this.player.y + this.player.height/2 - bikeY, 2));
+                const playerCenterX = this.player.x + this.player.width / 2;
+                const playerCenterY = this.player.y + this.player.height / 2;
+                const distance = Math.sqrt(Math.pow(playerCenterX - bikeX, 2) + Math.pow(playerCenterY - bikeY, 2));
                 if (distance < 100) {
                     // Passer à la phase suivante (écran noir)
                     console.log('✅ Interaction avec la moto, passage à la phase suivante');
-                    this.game.nextPhase(); // Cette méthode passera à la phase suivante ou affichera un écran noir
+                    this.cleanup();
+                    this.game.nextPhase();
                 }
+                return;
+            }
+            
+            // Gérer la transition de boss_talk vers player_choice (appuyer sur Entrée/E)
+            if (this.battleState === 'boss_talk' && (e.key === 'Enter' || e.key === 'e' || e.key === 'E') && !this._interactPressed) {
+                e.preventDefault();
+                this._interactPressed = true;
+                this.battleState = 'player_choice';
+                this.selectedAnswerIndex = 0;
                 return;
             }
             
@@ -309,12 +326,14 @@ class Phase3_Boss {
     }
     
     handleClick(x, y) {
-        // Gérer le clic sur le bouton "Rejouer" si Game Over
+        // Gérer le clic sur le bouton "Rejouer" si Game Over (même système que Phase1 et Phase2)
         if (this.battleState === 'game_over') {
             const buttonWidth = 200;
             const buttonHeight = 50;
             const buttonX = this.canvas.width / 2 - buttonWidth / 2;
-            const buttonY = this.canvas.height / 2 + 50;
+            let buttonY = this.canvas.height / 2 + 50;
+            const pressOffset = this.buttonPressed ? 3 : 0;
+            buttonY += pressOffset;
             
             if (x >= buttonX && x <= buttonX + buttonWidth &&
                 y >= buttonY && y <= buttonY + buttonHeight) {
@@ -352,7 +371,7 @@ class Phase3_Boss {
             this.bossHp = Math.max(0, this.bossHp - 10);
             console.log('✅ Bonne réponse ! Boss prend 10 dégâts. HP restants:', this.bossHp);
             this.battleState = 'result';
-            this.resultMessage = `Le boss prend 10 dégâts !`;
+            this.resultMessage = `C'est très efficace !`;
             
             // Vérifier si le boss est KO
             if (this.bossHp <= 0) {
@@ -364,7 +383,7 @@ class Phase3_Boss {
             this.game.playerData.hp = Math.max(0, this.game.playerData.hp - 20);
             console.log('❌ Mauvaise réponse ! Joueur prend 20 dégâts. HP restants:', this.game.playerData.hp);
             this.battleState = 'result';
-            this.resultMessage = `Vous prenez 20 dégâts !`;
+            this.resultMessage = `Cela ne semble pas assez toxique...`;
             
             // Vérifier si le joueur est KO
             if (this.game.playerData.hp <= 0) {
@@ -420,19 +439,25 @@ class Phase3_Boss {
         // Timer pour la flèche clignotante dans les dialogues
         this.dialogueArrowBlinkTimer += deltaTime;
         
-        // Gérer le dialogue d'introduction
+        // Gérer le dialogue d'introduction (bloquer le mouvement pendant le dialogue)
         if (this.battleState === 'intro_dialogue') {
-            this.introDialogueTimer += deltaTime;
-            if (this.introDialogueTimer >= 0.5 && !this.waitingForDialogueInput) {
-                this.waitingForDialogueInput = true;
+            // Mettre à jour seulement les animations du joueur
+            if (this.player && this.player.currentAnimation) {
+                this.player.currentAnimation.update(deltaTime);
             }
+            return; // Bloquer le mouvement pendant le dialogue
         }
         
-        // Gérer les dialogues de victoire/défaite
+        // Gérer les dialogues de victoire/défaite (bloquer le mouvement)
         if (this.battleState === 'victory_dialogue' || this.battleState === 'defeat_dialogue') {
             if (!this.waitingForDialogueInput) {
                 this.waitingForDialogueInput = true;
             }
+            // Mettre à jour seulement les animations du joueur
+            if (this.player && this.player.currentAnimation) {
+                this.player.currentAnimation.update(deltaTime);
+            }
+            return; // Bloquer le mouvement pendant les dialogues
         }
         
         // Si Game Over, ne pas permettre le mouvement
@@ -446,85 +471,31 @@ class Phase3_Boss {
         
         // Mode libre après victoire : permettre le mouvement
         if (this.battleState === 'victory_free') {
+            // Animer la disparition de la cage (effet cinématique)
+            if (this.cageVisible && this.cageFadeOutProgress < 1) {
+                this.cageFadeOutProgress = Math.min(1, this.cageFadeOutProgress + this.cageFadeOutSpeed);
+                if (this.cageFadeOutProgress >= 1) {
+                    this.cageVisible = false;
+                }
+            }
+            
             if (this.player) {
                 this.player.update(keys, deltaTime);
             }
             return;
         }
         
-        // Permettre le mouvement du joueur dans tous les autres états (dialogue, combat, etc.)
-        if (this.player) {
-            // Calculer le mouvement manuellement pour permettre le déplacement libre
-            const speedPerSecond = this.player.speed * 60;
-            let newX = this.player.x;
-            let newY = this.player.y;
-            let isMoving = false;
-            
-            // Calculer le mouvement selon les touches
-            if (keys['ArrowUp'] || keys['z'] || keys['Z']) {
-                newY -= speedPerSecond * deltaTime;
-                this.player.direction = 'up';
-                isMoving = true;
-            }
-            if (keys['ArrowDown'] || keys['w'] || keys['W']) {
-                newY += speedPerSecond * deltaTime;
-                this.player.direction = 'down';
-                isMoving = true;
-            }
-            if (keys['ArrowRight'] || keys['s'] || keys['S']) {
-                newX += speedPerSecond * deltaTime;
-                this.player.direction = 'right';
-                isMoving = true;
-            }
-            if (keys['ArrowLeft'] || keys['q'] || keys['Q']) {
-                newX -= speedPerSecond * deltaTime;
-                this.player.direction = 'left';
-                isMoving = true;
-            }
-            
-            this.player.isMoving = isMoving;
-            
-            // Appliquer les limites de l'écran
-            newX = Math.max(0, Math.min(this.canvas.width - this.player.width, newX));
-            newY = Math.max(0, Math.min(this.canvas.height - this.player.height, newY));
-            
-            // Aucune collision - le joueur peut se déplacer librement
-            this.player.x = newX;
-            this.player.y = newY;
-            
-            // Mettre à jour les animations du joueur
-            if (this.player.currentAnimation) {
+        // BLOQUER le mouvement du joueur pendant le combat (boss_talk, player_choice, result)
+        // Le joueur doit rester immobile pendant qu'il répond aux questions
+        if (this.battleState === 'boss_talk' || this.battleState === 'player_choice' || this.battleState === 'result') {
+            // Mettre à jour UNIQUEMENT les animations du joueur (pas le mouvement)
+            if (this.player && this.player.currentAnimation) {
                 this.player.currentAnimation.update(deltaTime);
             }
             
-            // Sélection de l'animation selon l'état
-            if (!this.player.isAlive) {
-                if (this.player.animations.dead) {
-                    this.player.switchAnimation(this.player.animations.dead);
-                }
-            } else if (this.player.isBlocking) {
-                if (this.player.animations.block) {
-                    this.player.switchAnimation(this.player.animations.block);
-                }
-            } else if (this.player.isMoving) {
-                if (this.player.animations.run) {
-                    this.player.switchAnimation(this.player.animations.run);
-                }
-            } else {
-                if (this.player.animations.idle) {
-                    this.player.switchAnimation(this.player.animations.idle);
-                }
-            }
-        }
-        
-        // Gestion de la transition automatique de boss_talk vers player_choice
-        if (this.battleState === 'boss_talk') {
-            this.bossTalkTimer += deltaTime;
+            // Pas de timer automatique - le joueur doit appuyer sur Entrée/E pour passer aux choix
             
-            // Après 2 secondes, passer au choix du joueur
-            if (this.bossTalkTimer >= 2) {
-                this.battleState = 'player_choice';
-            }
+            return; // NE PAS permettre le mouvement
         }
     }
     
@@ -545,10 +516,10 @@ class Phase3_Boss {
         // Rendu selon l'état
         if (this.battleState === 'game_over') {
             this.renderGameOver(ctx);
-        } else if (this.battleState === 'victory_dialogue' || this.battleState === 'defeat_dialogue' || this.battleState === 'intro_dialogue') {
+        } else if (this.battleState === 'victory_dialogue' || this.battleState === 'defeat_dialogue' || this.battleState === 'intro_dialogue' || 
+                   this.battleState === 'boss_talk' || this.battleState === 'player_choice' || this.battleState === 'result') {
+            // Tous les dialogues (intro, combat, victoire, défaite) utilisent la même boîte de dialogue
             this.renderDialogue(ctx);
-        } else if (this.battleState !== 'victory_free') {
-            this.renderBattleUI(ctx);
         }
     }
     
@@ -597,8 +568,15 @@ class Phase3_Boss {
         }
         
         // Dessiner la cage PAR-DESSUS la moto (les barreaux apparaîtront devant)
-        if (this.cageVisible) {
+        // Appliquer l'effet de fondu si la cage disparaît
+        if (this.cageVisible || (this.battleState === 'victory_free' && this.cageFadeOutProgress < 1)) {
+            ctx.save();
+            // Appliquer la transparence pour l'effet de fondu
+            if (this.battleState === 'victory_free') {
+                ctx.globalAlpha = 1 - this.cageFadeOutProgress;
+            }
             this.renderCage(ctx);
+            ctx.restore();
         }
         
         // Dessiner le boss (cœur) au milieu de l'écran (seulement si pas en mode libre)
@@ -720,52 +698,155 @@ class Phase3_Boss {
     }
     
     renderDialogue(ctx) {
-        // Cadre de dialogue en bas
-        const dialogHeight = 200;
-        const dialogWidth = this.canvas.width - 40;
-        const dialogX = 20;
-        const dialogY = this.canvas.height - dialogHeight - 20;
+        // Même style et position que Phase2_Riddle
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.imageSmoothingEnabled = true;
         
-        // Fond du dialogue
+        // Dimensions de la fenêtre de dialogue (même style que Phase2_Riddle)
+        // Plus grande pour les choix de réponse
+        let dialogWidth = Math.min(800, Math.max(500, this.canvas.width * 0.75));
+        let dialogHeight;
+        let dialogX = (this.canvas.width - dialogWidth) / 2;
+        let dialogY;
+        
+        // Ajuster la taille selon le type de dialogue
+        if (this.battleState === 'player_choice') {
+            // Fenêtre plus grande pour les choix de réponse
+            dialogHeight = 350;
+            dialogY = this.canvas.height * 0.15; // Plus haut pour voir tout le dialogue
+        } else {
+            // Fenêtre normale pour les dialogues simples
+            dialogHeight = Math.min(120, Math.max(80, this.canvas.height * 0.15));
+            dialogY = this.canvas.height * 0.5; // Même position que Phase2_Riddle (milieu de l'écran)
+        }
+        
+        // Fond noir opaque
         ctx.fillStyle = '#000000';
         ctx.fillRect(dialogX, dialogY, dialogWidth, dialogHeight);
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = 3;
+        
+        // Bordure blanche épaisse (style RPG, comme Phase2_Riddle)
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 4;
         ctx.strokeRect(dialogX, dialogY, dialogWidth, dialogHeight);
         
-        ctx.fillStyle = '#FFFFFF';
+        // Bordure intérieure fine (comme Phase2_Riddle)
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(dialogX + 3, dialogY + 3, dialogWidth - 6, dialogHeight - 6);
+        
+        ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 18px Arial';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         
-        let dialogueText = '';
-        if (this.battleState === 'intro_dialogue') {
-            dialogueText = this.introDialogueLines[0];
-        } else if (this.battleState === 'victory_dialogue') {
-            dialogueText = this.victoryDialogueLines[0];
-        } else if (this.battleState === 'defeat_dialogue') {
-            dialogueText = this.defeatDialogueLines[0];
-        }
-        
-        // Afficher le texte du dialogue
-        const lines = this.wrapText(ctx, dialogueText, dialogWidth - 40);
-        let yPos = dialogY + 20;
-        lines.forEach(line => {
-            ctx.fillText(line, dialogX + 20, yPos);
-            yPos += 25;
-        });
-        
-        // Flèche clignotante
-        if (this.waitingForDialogueInput && Math.floor(this.dialogueArrowBlinkTimer * 2) % 2 === 0) {
-            ctx.fillStyle = '#FFFFFF';
-            const arrowX = dialogX + dialogWidth - 40;
-            const arrowY = dialogY + dialogHeight - 40;
-            ctx.beginPath();
-            ctx.moveTo(arrowX, arrowY);
-            ctx.lineTo(arrowX - 10, arrowY - 10);
-            ctx.lineTo(arrowX - 10, arrowY + 10);
-            ctx.closePath();
-            ctx.fill();
+        // Gérer différents types de dialogue
+        if (this.battleState === 'intro_dialogue' || this.battleState === 'victory_dialogue' || this.battleState === 'defeat_dialogue') {
+            // Dialogues simples (intro, victoire, défaite)
+            let dialogueText = '';
+            if (this.battleState === 'intro_dialogue') {
+                dialogueText = this.introDialogueLines[0];
+            } else if (this.battleState === 'victory_dialogue') {
+                dialogueText = this.victoryDialogueLines[0];
+            } else if (this.battleState === 'defeat_dialogue') {
+                dialogueText = this.defeatDialogueLines[0];
+            }
+            
+            // Afficher le texte du dialogue (même style que Phase2_Riddle)
+            const lines = this.wrapText(ctx, dialogueText, dialogWidth - 60);
+            lines.forEach((line, i) => {
+                ctx.fillText(line, dialogX + 20, dialogY + 20 + (i * 24));
+            });
+            
+            // Flèche clignotante (même style que Phase2_Riddle)
+            if (this.waitingForDialogueInput) {
+                const arrowVisible = Math.floor(this.dialogueArrowBlinkTimer * 2) % 2 === 0;
+                if (arrowVisible) {
+                    ctx.fillStyle = '#ffffff';
+                    const arrowX = dialogX + dialogWidth - 30;
+                    const arrowY = dialogY + dialogHeight - 25;
+                    ctx.beginPath();
+                    ctx.moveTo(arrowX, arrowY);
+                    ctx.lineTo(arrowX - 8, arrowY - 8);
+                    ctx.lineTo(arrowX + 8, arrowY - 8);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+            }
+        } else if (this.battleState === 'boss_talk') {
+            // Le boss parle (phrase d'attaque)
+            const currentPhrase = this.bossPhrases[this.currentTurn];
+            ctx.fillText(`AMAR: ${currentPhrase.text}`, dialogX + 20, dialogY + 20);
+            
+            // Flèche clignotante pour indiquer qu'on peut appuyer sur Entrée
+            const arrowVisible = Math.floor(this.dialogueArrowBlinkTimer * 2) % 2 === 0;
+            if (arrowVisible) {
+                ctx.fillStyle = '#ffffff';
+                const arrowX = dialogX + dialogWidth - 30;
+                const arrowY = dialogY + dialogHeight - 25;
+                ctx.beginPath();
+                ctx.moveTo(arrowX, arrowY);
+                ctx.lineTo(arrowX - 8, arrowY - 8);
+                ctx.lineTo(arrowX + 8, arrowY - 8);
+                ctx.closePath();
+                ctx.fill();
+            }
+        } else if (this.battleState === 'player_choice') {
+            // Choix du joueur (comme dans Phase2_Riddle pour l'énigme)
+            const currentPhrase = this.bossPhrases[this.currentTurn];
+            
+            // Afficher "Vous devez répondre:" ou la question
+            ctx.fillText("Répondre :", dialogX + 20, dialogY + 20);
+            
+            let yPos = dialogY + 60;
+            currentPhrase.answers.forEach((answer, index) => {
+                const isSelected = index === this.selectedAnswerIndex;
+                
+                // Fond pour la réponse sélectionnée (comme Phase2_Riddle)
+                if (isSelected) {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                    ctx.fillRect(dialogX + 15, yPos, dialogWidth - 30, 30);
+                }
+                
+                // Flèche pour la réponse sélectionnée (pointant vers la droite, style dialogue)
+                if (isSelected) {
+                    ctx.fillStyle = '#ffffff';
+                    const arrowX = dialogX + 25;
+                    const arrowY = yPos + 15; // Alignée avec le texte
+                    ctx.beginPath();
+                    ctx.moveTo(arrowX, arrowY);
+                    ctx.lineTo(arrowX - 8, arrowY - 8);
+                    ctx.lineTo(arrowX - 8, arrowY + 8);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+                
+                // Texte de la réponse
+                ctx.fillStyle = isSelected ? '#ffff00' : '#ffffff';
+                ctx.font = 'bold 18px Arial';
+                ctx.fillText(answer.text, dialogX + 45, yPos + 15);
+                
+                yPos += 40;
+            });
+        } else if (this.battleState === 'result') {
+            // Résultat du tour
+            ctx.fillText(this.resultMessage || '...', dialogX + 20, dialogY + 20);
+            ctx.fillText('Appuyez sur Entrée pour continuer', dialogX + 20, dialogY + 60);
+            
+            // Flèche clignotante
+            const arrowVisible = Math.floor(this.dialogueArrowBlinkTimer * 2) % 2 === 0;
+            if (arrowVisible) {
+                ctx.fillStyle = '#ffffff';
+                const arrowX = dialogX + dialogWidth - 30;
+                const arrowY = dialogY + dialogHeight - 25;
+                ctx.beginPath();
+                ctx.moveTo(arrowX, arrowY);
+                ctx.lineTo(arrowX - 8, arrowY - 8);
+                ctx.lineTo(arrowX + 8, arrowY - 8);
+                ctx.closePath();
+                ctx.fill();
+            }
         }
     }
     
@@ -810,11 +891,11 @@ class Phase3_Boss {
         if (this.battleState === 'boss_talk') {
             // Le boss parle
             const currentPhrase = this.bossPhrases[this.currentTurn];
-            ctx.fillText(`AMAR: ${currentPhrase.text}`, dialogX + 20, dialogY + 20);
+            ctx.fillText(`Amar: ${currentPhrase.text}`, dialogX + 20, dialogY + 20);
         } else if (this.battleState === 'player_choice') {
             // Choix du joueur
             const currentPhrase = this.bossPhrases[this.currentTurn];
-            ctx.fillText(`Vous devez répondre:`, dialogX + 20, dialogY + 20);
+            ctx.fillText(`Répondre :`, dialogX + 20, dialogY + 20);
             
             let yPos = dialogY + 60;
             currentPhrase.answers.forEach((answer, index) => {
@@ -891,4 +972,4 @@ class Phase3_Boss {
         ctx.textBaseline = 'middle';
         ctx.fillText('Rejouer', this.canvas.width / 2, buttonY + buttonHeight / 2);
     }
-}
+} 

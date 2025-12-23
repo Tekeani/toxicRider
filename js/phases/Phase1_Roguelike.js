@@ -52,6 +52,12 @@ class Phase1_Roguelike {
         const width = this.canvas.width;
         const height = this.canvas.height;
 
+        // Nettoyer les anciens event listeners avant de réinitialiser (important quand on revient depuis une autre phase)
+        this.cleanup();
+        
+        // Réinitialiser les event listeners (au cas où ils ont été supprimés ou corrompus)
+        this.setupInput();
+
         // Initialiser la tilemap
         this.tileMap = new TileMap(Math.ceil(width / 32), Math.ceil(height / 32), 32);
         this.tileMap.generateMap();
@@ -147,13 +153,20 @@ class Phase1_Roguelike {
     cleanup() {
         if (this.keydownHandler) {
             document.removeEventListener('keydown', this.keydownHandler);
+            this.keydownHandler = null;
         }
         if (this.keyupHandler) {
             document.removeEventListener('keyup', this.keyupHandler);
+            this.keyupHandler = null;
         }
         if (this.clickHandler) {
             this.canvas.removeEventListener('click', this.clickHandler);
+            this.clickHandler = null;
         }
+        
+        // Réinitialiser les flags de pression
+        this._attackPressed = false;
+        this._toxicityPressed = false;
     }
 
     spawnWave() {
@@ -816,11 +829,11 @@ class Phase1_Roguelike {
             ctx.fillText('+10 Toxicité', toxicityButtonX + buttonWidth / 2, buttonY + toxicityPressOffset + buttonHeight / 2);
         }
         
-        // 7. Écran Game Over (dessiné en dernier pour être au-dessus de tout)
-        if (this.gameOver) {
-            // Fond semi-transparent
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-            ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            // 7. Écran Game Over (dessiné en dernier pour être au-dessus de tout)
+            if (this.gameOver) {
+                // Fond semi-transparent
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
             
             // Texte "GAME OVER"
             ctx.fillStyle = '#ff0000';

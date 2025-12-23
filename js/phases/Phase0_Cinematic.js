@@ -21,9 +21,9 @@ class Phase0_Cinematic {
         this.knightFadeSpeed = 4.8; // par seconde (équivalent à 0.08 par frame à 60 FPS)
         this.dialogueIndex = 0;
         this.dialogueLines = [
-            "Miaou ! Chevalier Damas ! Tu es là !",
-            "Tu dois te dépêcher ! Le puissant Amar a enlevé ta bien-aimée et l'a enfermée dans son donjon !",
-            "Va vite la libérer ! Miaou !"
+            "Miaou ! Ah tu es là chevalier Damas ! Je te cherchais partout !",
+            "La puissante Amar a enlevé ta bien-aimée et l'a enfermée dans son terrible donjon !",
+            "Tu dois la libérer avant qu'il ne soit trop tard ! Bonne chance ! *hérisse ses poils de dos* pffft pffft !"
         ];
         this.waitingForInput = false;
         this.keys = {};

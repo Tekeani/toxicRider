@@ -15,7 +15,7 @@ class Phase2_Riddle {
         
         // État de transition
         this.transitionActive = true;
-        this.transitionText = "Après une bien trop longue marche...";
+        this.transitionText = "Après une bien trop longue marche";
         this.waitingForInput = false;
         this.transitionComplete = false;
         this.transitionArrowBlinkTimer = 0;
@@ -27,7 +27,7 @@ class Phase2_Riddle {
             "Meuh ! Tremble devant le terrible gardien du terrible donjon de la terrible Amar !",
             "*ton soudainement enjouée* Tu veux bien jouer avec moi :) ?",
             "Je te propose un deal : réponds correctement à ma devinette et je te laisse franchir les portes du donjon (*marmonne* de toute façon Amar ne me paye pas assez pour ces conneries...)",
-            "Si tu te trompes, tu devras te retourner, te défroquer, te pencher et *rire sardonique*"
+            "Si tu te trompes, tu devras te retourner, te défroquer, te pencher et... *rire machiavélique*"
         ];
         this.dialogueArrowBlinkTimer = 0;
         this.dialogueCooldown = 0.3;
@@ -79,6 +79,9 @@ class Phase2_Riddle {
         const width = this.canvas.width;
         const height = this.canvas.height;
         
+        // Nettoyer les anciens event listeners avant de réinitialiser (important quand on revient depuis une autre phase)
+        this.cleanup();
+        
         // ============================================================================
         // ⚠️⚠️⚠️ ATTENTION CRITIQUE - NE JAMAIS CHANGER LE NPC ICI ⚠️⚠️⚠️
         // ============================================================================
@@ -111,6 +114,22 @@ class Phase2_Riddle {
         
         // Charger UNIQUEMENT le sprite SHEEPMAN (pas de chat, pas d'oldman, SHEEPMAN SEULEMENT)
         await this.loadSheepmanSprite();
+        
+        // Réinitialiser TOUS les états (important quand on revient depuis une autre phase)
+        this.gameOver = false;
+        this.buttonPressed = false;
+        this.dialogueActive = false;
+        this.dialogueIndex = 0;
+        this.waitingForDialogueInput = false;
+        this.riddleState = 'dialogue';
+        this.selectedAnswerIndex = 0;
+        this.answerResult = null;
+        this.resultText = '';
+        this.bossTransitionActive = false;
+        this.bossTransitionTimer = 0;
+        this.transitionArrowBlinkTimer = 0;
+        this.dialogueArrowBlinkTimer = 0;
+        this.dialogueCooldown = 0.3;
         
         // Démarrer la transition
         this.transitionActive = true;
@@ -392,14 +411,22 @@ class Phase2_Riddle {
     
     cleanup() {
         if (this.keydownHandler) {
-            document.removeEventListener('keydown', this.keydownHandler);
+            // IMPORTANT : Utiliser le même paramètre de capture (true) que dans addEventListener
+            document.removeEventListener('keydown', this.keydownHandler, true);
+            this.keydownHandler = null;
         }
         if (this.keyupHandler) {
-            document.removeEventListener('keyup', this.keyupHandler);
+            // IMPORTANT : Utiliser le même paramètre de capture (true) que dans addEventListener
+            document.removeEventListener('keyup', this.keyupHandler, true);
+            this.keyupHandler = null;
         }
         if (this.clickHandler) {
             this.canvas.removeEventListener('click', this.clickHandler);
+            this.clickHandler = null;
         }
+        
+        // Réinitialiser le flag d'interaction
+        this._interactPressed = false;
     }
     
     // Vérifier si une position est dans le château (collision)
