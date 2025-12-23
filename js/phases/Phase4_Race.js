@@ -684,7 +684,7 @@ class Phase4_Race {
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         
-        const message = "Bravo ! Tu fais officiellement partie du gang des vrais mâles alphas. Chevaliers de l'ombre qui combattent pour conserver leur liberté et répandent leur toxicité, envers et contre tous !";
+        const message = "Bravo ! Tu fais officiellement partie du gang des vrais mâles alphas. Chevaliers de l'ombre qui combattent pour conserver leur liberté et répandre leur toxicité !";
         const lines = this.wrapText(ctx, message, dialogWidth - 60);
         lines.forEach((line, i) => {
             ctx.fillText(line, dialogX + 20, dialogY + 20 + (i * 25));

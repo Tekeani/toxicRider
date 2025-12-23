@@ -20,12 +20,32 @@ class Enemy {
         
         this.isAlive = true;
         this.direction = 'left';
-        this.spriteIndex = Math.floor(Math.random() * 16); // 16 sprites dans roguelikecreatures.png
+        this.spriteIndex = this._getValidSpriteIndex(); // Utiliser seulement les sprites non vides
         
         this.spriteSheet = null;
         this.spriteLoaded = false;
         
         this.loadSprite();
+    }
+
+    _getValidSpriteIndex() {
+        // Liste des sprites RÉELLEMENT valides après analyse de l'image
+        // Le sprite sheet fait 8 colonnes x 9 lignes (128x144 pixels avec sprites de 16x16)
+        // Ces indices ont été vérifiés pixel par pixel
+        const validSpriteIndices = [
+            0, 1, 2, 3, 4, 5, 6,           // Ligne 0 (pas le 7)
+            8, 9, 10, 11, 12, 13,          // Ligne 1 (pas 14-15)
+            16, 17, 18, 19, 20, 21,        // Ligne 2 (pas 22-23)
+            24, 25, 26,                    // Ligne 3 (seulement 3 sprites)
+            32, 33, 34, 35, 36, 37, 38, 39,// Ligne 4 (tous)
+            40, 41, 42, 43, 44, 45, 46, 47,// Ligne 5 (tous)
+            48, 49, 50, 51, 52, 53, 54,    // Ligne 6 (pas le 55)
+            56, 57, 58, 59, 60, 61, 62, 63,// Ligne 7 (tous)
+            64, 65, 66, 67, 68, 69, 70     // Ligne 8 (pas le 71)
+        ];
+        
+        // Sélectionner aléatoirement un indice valide
+        return validSpriteIndices[Math.floor(Math.random() * validSpriteIndices.length)];
     }
 
     static async loadSharedSprite() {
@@ -131,9 +151,9 @@ class Enemy {
         }
 
         // Calculer la position du sprite dans la feuille (sprites de 16x16)
-        // Le sprite sheet est organisé en grille, on utilise spriteIndex pour choisir un sprite
-        const spriteRow = Math.floor(this.spriteIndex / 4);
-        const spriteCol = this.spriteIndex % 4;
+        // Le sprite sheet fait 8 colonnes x 9 lignes (128x144 pixels)
+        const spriteRow = Math.floor(this.spriteIndex / 8);
+        const spriteCol = this.spriteIndex % 8;
         const sx = spriteCol * this.spriteWidth;
         const sy = spriteRow * this.spriteHeight;
 
