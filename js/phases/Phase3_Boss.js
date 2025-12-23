@@ -107,6 +107,11 @@ class Phase3_Boss {
         this.resultDuration = 2.0; // 2 secondes d'affichage du résultat avant transition
         this.cageFadeOutProgress = 0; // Progression de la disparition de la cage (0 à 1)
         this.cageFadeOutSpeed = 0.02; // Vitesse de disparition
+        
+        // Transition cinématique vers Phase4_Race (fondu noir)
+        this.raceTransitionActive = false;
+        this.raceTransitionTimer = 0;
+        this.raceTransitionDuration = 1.0; // 1 seconde de fondu
     }
     
     async init() {
@@ -136,6 +141,8 @@ class Phase3_Boss {
         this.heartPulseTime = 0;
         this.resultMessage = null;
         this.resultTimer = 0; // Réinitialiser le timer de résultat
+        this.raceTransitionActive = false;
+        this.raceTransitionTimer = 0;
         this.introDialogueComplete = false;
         this.victoryDialogueComplete = false;
         this.defeatDialogueComplete = false;
@@ -268,10 +275,10 @@ class Phase3_Boss {
                 const playerCenterY = this.player.y + this.player.height / 2;
                 const distance = Math.sqrt(Math.pow(playerCenterX - bikeX, 2) + Math.pow(playerCenterY - bikeY, 2));
                 if (distance < 100) {
-                    // Passer à la phase suivante (écran noir)
-                    console.log('✅ Interaction avec la moto, passage à la phase suivante');
-                    this.cleanup();
-                    this.game.nextPhase();
+                    // Démarrer la transition cinématique vers Phase4_Race
+                    console.log('✅ Interaction avec la moto, démarrage transition vers Phase4_Race');
+                    this.raceTransitionActive = true;
+                    this.raceTransitionTimer = 0;
                 }
                 return;
             }
@@ -471,6 +478,19 @@ class Phase3_Boss {
         
         // Mode libre après victoire : permettre le mouvement
         if (this.battleState === 'victory_free') {
+            // Gérer la transition cinématique vers Phase4_Race (fondu noir)
+            if (this.raceTransitionActive) {
+                this.raceTransitionTimer += deltaTime;
+                
+                // Quand le fondu est complet (écran noir), passer à la phase suivante
+                if (this.raceTransitionTimer >= this.raceTransitionDuration) {
+                    console.log('✅ Transition terminée, passage à Phase4_Race');
+                    this.cleanup();
+                    this.game.nextPhase();
+                }
+                return; // Ne pas mettre à jour le jeu pendant la transition
+            }
+            
             // Animer la disparition de la cage (effet cinématique)
             if (this.cageVisible && this.cageFadeOutProgress < 1) {
                 this.cageFadeOutProgress = Math.min(1, this.cageFadeOutProgress + this.cageFadeOutSpeed);
@@ -527,6 +547,13 @@ class Phase3_Boss {
                    this.battleState === 'boss_talk' || this.battleState === 'player_choice' || this.battleState === 'result') {
             // Tous les dialogues (intro, combat, victoire, défaite) utilisent la même boîte de dialogue
             this.renderDialogue(ctx);
+        }
+        
+        // Transition cinématique vers Phase4_Race (fondu noir) - dessiné en dernier
+        if (this.raceTransitionActive) {
+            const fadeProgress = Math.min(1, this.raceTransitionTimer / this.raceTransitionDuration);
+            ctx.fillStyle = `rgba(0, 0, 0, ${fadeProgress})`;
+            ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         }
     }
     

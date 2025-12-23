@@ -70,7 +70,8 @@ class Game {
             new Phase0_Cinematic(this),
             new Phase1_Roguelike(this),
             new Phase2_Riddle(this),
-            new Phase3_Boss(this)
+            new Phase3_Boss(this),
+            new Phase4_Race(this)
         ];
 
         // Initialiser la première phase

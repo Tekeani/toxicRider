@@ -316,6 +316,15 @@ class Phase0_Cinematic {
 
             ctx.strokeText('TOXIC RIDER', this.canvas.width / 2, this.logoY);
             ctx.fillText('TOXIC RIDER', this.canvas.width / 2, this.logoY);
+            
+            // Crédit sous le titre (même style que le titre)
+            ctx.font = 'bold 24px "Courier New", monospace';
+            ctx.fillStyle = '#fff';
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 4;
+            ctx.strokeText('Réalisé par Marie Marchal pour son amoureux toxique', this.canvas.width / 2, this.logoY + 50);
+            ctx.fillText('Réalisé par Marie Marchal pour son amoureux toxique', this.canvas.width / 2, this.logoY + 50);
+            
             ctx.restore();
         }
 
