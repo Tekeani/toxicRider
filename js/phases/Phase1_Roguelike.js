@@ -423,6 +423,14 @@ class Phase1_Roguelike {
             this._updateLogged = true;
         }
         
+        // CRITIQUE : Plafonner deltaTime pour éviter les sauts de temps lors du chargement initial
+        // Si deltaTime est supérieur à 0.1 secondes (100ms), le limiter
+        // Cela évite que le timer de 5 secondes soit consommé en une seule frame
+        if (deltaTime > 0.1) {
+            console.warn('⚠️ deltaTime anormalement grand:', deltaTime, '- limité à 0.1s');
+            deltaTime = 0.1;
+        }
+        
         // Si Game Over, ne pas mettre à jour le jeu
         if (this.gameOver) {
             return;

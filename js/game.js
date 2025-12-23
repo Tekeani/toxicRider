@@ -110,13 +110,17 @@ class Game {
 
             const deltaTime = (time - lastTime) / 1000;
             lastTime = time;
+            
+            // CRITIQUE : Plafonner deltaTime à 0.1 secondes (100ms) pour éviter les sauts de temps
+            // Lors du chargement initial ou des changements de phase, deltaTime peut être énorme
+            const clampedDeltaTime = Math.min(deltaTime, 0.1);
 
             // LOG COMBIEN DE FOIS ON APPELLE RENDER
             const renderCountBefore = this.currentPhase?._renderCount || 0;
 
             // Mise à jour (seulement si pas en pause)
             if (this.currentPhase && !this.isPaused) {
-                this.currentPhase.update(deltaTime, this.keys);
+                this.currentPhase.update(clampedDeltaTime, this.keys);
             }
 
             // Rendu - FORCER 1 SEUL APPEL
