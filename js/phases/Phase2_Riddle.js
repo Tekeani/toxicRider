@@ -444,17 +444,11 @@ class Phase2_Riddle {
             return;
         }
         
-        // Gérer la transition vers le boss
+        // Gérer la transition vers le boss (passage immédiat, sans écran noir)
         if (this.bossTransitionActive) {
-            this.bossTransitionTimer += deltaTime;
-            
-            // Après 2 secondes d'écran noir, passer à la phase boss
-            if (this.bossTransitionTimer >= 2) {
-                console.log('🔄 Transition vers Phase3_Boss');
-                this.cleanup();
-                this.game.nextPhase();
-            }
-            
+            console.log('🔄 Transition vers Phase3_Boss');
+            this.cleanup();
+            this.game.nextPhase();
             return;
         }
         
@@ -588,10 +582,9 @@ class Phase2_Riddle {
             return;
         }
         
-        // ========== TRANSITION VERS BOSS (écran noir) ==========
+        // ========== TRANSITION VERS BOSS (pas d'écran noir, passage direct) ==========
         if (this.bossTransitionActive) {
-            ctx.fillStyle = '#000000';
-            ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            // Ne rien dessiner, la transition se fait immédiatement
             return;
         }
         

@@ -18,15 +18,15 @@ class Phase3_Boss {
         this.bossSpriteLoaded = false;
         this.bikeSpriteLoaded = false;
         
-        // Position de la cage et de la moto (en haut de l'écran)
-        this.cageX = this.canvas.width / 2 - 100;
+        // Position de la cage et de la moto (en haut à gauche de l'écran)
+        this.cageX = 100; // Décalé sur la gauche
         this.cageY = 50; // En haut de l'écran
         this.cageWidth = 200;
         this.cageHeight = 150;
         this.cageVisible = true;
         
-        // Position du boss (cœur) au milieu-haut de l'écran (sous la cage)
-        this.bossX = this.canvas.width / 2;
+        // Position du boss (cœur) à gauche, sous la cage
+        this.bossX = 200; // À gauche de l'écran
         this.bossY = this.canvas.height / 2 - 100; // Remonté de 100 pixels
         
         // Dialogue d'introduction
@@ -108,10 +108,19 @@ class Phase3_Boss {
     async init() {
         console.log('🎮 Phase3_Boss.init() appelé');
         
-        // Position initiale du joueur (visible, au centre bas)
-        const playerX = this.canvas.width / 2 - 32;
-        const playerY = this.canvas.height - 150;
+        // Réinitialiser les positions
+        this.cageX = 100; // Cage en haut à gauche
+        this.cageY = 50; // Cage en haut
+        this.bossX = 200; // Boss à gauche
+        this.bossY = this.canvas.height / 2 - 100; // Boss remonté (sous la cage)
+        
+        // Position initiale du joueur (à droite d'Amar, même niveau vertical)
+        const playerX = this.bossX + 400; // Grand espace à droite d'Amar
+        const playerY = this.bossY - 20; // Même niveau vertical qu'Amar (ajusté pour centrer)
         this.player = new Player(playerX, playerY, this.game);
+        
+        // S'assurer que le sprite du joueur est chargé
+        await this.player.loadSprite();
         
         // Réinitialiser l'état du combat
         this.bossHp = 50;
@@ -128,11 +137,6 @@ class Phase3_Boss {
         this.cageVisible = true;
         this.waitingForDialogueInput = false;
         this.dialogueArrowBlinkTimer = 0;
-        
-        // Réinitialiser les positions
-        this.cageY = 50; // Cage en haut
-        this.bossX = this.canvas.width / 2; // Boss au milieu horizontal
-        this.bossY = this.canvas.height / 2 - 100; // Boss remonté (sous la cage)
         
         // Charger les sprites
         await this.loadSprites();
@@ -422,11 +426,6 @@ class Phase3_Boss {
             if (this.introDialogueTimer >= 0.5 && !this.waitingForDialogueInput) {
                 this.waitingForDialogueInput = true;
             }
-            // Mettre à jour les animations du joueur pendant le dialogue
-            if (this.player && this.player.currentAnimation) {
-                this.player.currentAnimation.update(deltaTime);
-            }
-            return; // Ne pas mettre à jour le mouvement pendant le dialogue d'intro
         }
         
         // Gérer les dialogues de victoire/défaite
@@ -434,15 +433,14 @@ class Phase3_Boss {
             if (!this.waitingForDialogueInput) {
                 this.waitingForDialogueInput = true;
             }
-            // Mettre à jour les animations du joueur pendant le dialogue
+        }
+        
+        // Si Game Over, ne pas permettre le mouvement
+        if (this.battleState === 'game_over') {
+            // Mettre à jour seulement les animations
             if (this.player && this.player.currentAnimation) {
                 this.player.currentAnimation.update(deltaTime);
             }
-            return; // Ne pas mettre à jour le mouvement pendant les dialogues
-        }
-        
-        // Si Game Over, ne rien faire
-        if (this.battleState === 'game_over') {
             return;
         }
         
@@ -454,10 +452,69 @@ class Phase3_Boss {
             return;
         }
         
-        // Pendant le combat, ne pas permettre le mouvement
-        // Mettre à jour les animations du joueur
-        if (this.player && this.player.currentAnimation) {
-            this.player.currentAnimation.update(deltaTime);
+        // Permettre le mouvement du joueur dans tous les autres états (dialogue, combat, etc.)
+        if (this.player) {
+            // Calculer le mouvement manuellement pour permettre le déplacement libre
+            const speedPerSecond = this.player.speed * 60;
+            let newX = this.player.x;
+            let newY = this.player.y;
+            let isMoving = false;
+            
+            // Calculer le mouvement selon les touches
+            if (keys['ArrowUp'] || keys['z'] || keys['Z']) {
+                newY -= speedPerSecond * deltaTime;
+                this.player.direction = 'up';
+                isMoving = true;
+            }
+            if (keys['ArrowDown'] || keys['w'] || keys['W']) {
+                newY += speedPerSecond * deltaTime;
+                this.player.direction = 'down';
+                isMoving = true;
+            }
+            if (keys['ArrowRight'] || keys['s'] || keys['S']) {
+                newX += speedPerSecond * deltaTime;
+                this.player.direction = 'right';
+                isMoving = true;
+            }
+            if (keys['ArrowLeft'] || keys['q'] || keys['Q']) {
+                newX -= speedPerSecond * deltaTime;
+                this.player.direction = 'left';
+                isMoving = true;
+            }
+            
+            this.player.isMoving = isMoving;
+            
+            // Appliquer les limites de l'écran
+            newX = Math.max(0, Math.min(this.canvas.width - this.player.width, newX));
+            newY = Math.max(0, Math.min(this.canvas.height - this.player.height, newY));
+            
+            // Aucune collision - le joueur peut se déplacer librement
+            this.player.x = newX;
+            this.player.y = newY;
+            
+            // Mettre à jour les animations du joueur
+            if (this.player.currentAnimation) {
+                this.player.currentAnimation.update(deltaTime);
+            }
+            
+            // Sélection de l'animation selon l'état
+            if (!this.player.isAlive) {
+                if (this.player.animations.dead) {
+                    this.player.switchAnimation(this.player.animations.dead);
+                }
+            } else if (this.player.isBlocking) {
+                if (this.player.animations.block) {
+                    this.player.switchAnimation(this.player.animations.block);
+                }
+            } else if (this.player.isMoving) {
+                if (this.player.animations.run) {
+                    this.player.switchAnimation(this.player.animations.run);
+                }
+            } else {
+                if (this.player.animations.idle) {
+                    this.player.switchAnimation(this.player.animations.idle);
+                }
+            }
         }
         
         // Gestion de la transition automatique de boss_talk vers player_choice

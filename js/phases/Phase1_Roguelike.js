@@ -27,6 +27,7 @@ class Phase1_Roguelike {
             "C'est toi le problème !",
             "Toi ta gueule !"
         ];
+        this.usedInsults = []; // Insultes déjà utilisées dans cette session
         this.waveStartTimer = 0; // Timer pour le compte à rebours de la vague
         this.waveStartDelay = 5; // 5 secondes d'attente
         this.enemyAttackCooldown = 0; // Cooldown global pour attaques des ennemis
@@ -273,8 +274,23 @@ class Phase1_Roguelike {
             const damage = 30; // Insulte = 30 dégâts
             const range = 400; // Portée augmentée pour une attaque à distance
             
-            // Choisir une insulte aléatoire
-            const randomInsult = this.insultList[Math.floor(Math.random() * this.insultList.length)];
+            // Système anti-répétition : utiliser toutes les insultes avant de recommencer
+            let availableInsults = [];
+            
+            // Si toutes les insultes ont été utilisées, réinitialiser
+            if (this.usedInsults.length >= this.insultList.length) {
+                this.usedInsults = [];
+            }
+            
+            // Récupérer les insultes non encore utilisées
+            availableInsults = this.insultList.filter(insult => !this.usedInsults.includes(insult));
+            
+            // Choisir une insulte aléatoire parmi celles disponibles
+            const randomIndex = Math.floor(Math.random() * availableInsults.length);
+            const randomInsult = availableInsults[randomIndex];
+            
+            // Ajouter l'insulte à la liste des utilisées
+            this.usedInsults.push(randomInsult);
             
             // Trouver l'ennemi le plus proche pour orienter l'insulte
             // Utiliser les centres des hitboxes pour un calcul de distance précis
@@ -881,6 +897,7 @@ class Phase1_Roguelike {
         this.enemies = [];
         this.attackFeedbacks = [];
         this.insults = [];
+        this.usedInsults = []; // Réinitialiser les insultes utilisées
         this.enemyAttackIndex = 0;
         this.enemyAttackCooldown = 0;
         
