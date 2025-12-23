@@ -12,13 +12,14 @@ class Phase4_Race {
         this.gameOver = false;
         
         // Moto
-        this.bikeSprite = null;
-        this.bikeSpriteLoaded = false;
         this.bikeX = this.canvas.width / 2; // Position X de la moto (peut bouger gauche/droite)
         this.bikeY = this.canvas.height * 0.55; // Position Y remontée (55% de la hauteur)
         this.bikeWidth = 80;
         this.bikeHeight = 80;
         this.bikeSpeed = 300; // Vitesse de déplacement gauche/droite (pixels par seconde)
+        this.bikeCurrentFrame = 0; // 0 = gauche, 1 = droite
+        this.bikeSpriteSheet = null; // Sprite sheet généré
+        this.BIKE_SPRITE_SIZE = 32; // Taille d'une frame du sprite sheet
         
         // Route
         this.roadWidth = 400;
@@ -64,6 +65,8 @@ class Phase4_Race {
         this.finished = false;
         this.gameOver = false;
         this.bikeX = this.canvas.width / 2;
+        this.bikeCurrentFrame = 0;
+        this._bikeRenderCount = 0; // Réinitialiser le compteur de debug
         this.roadScrollOffset = 0;
         this.enemies = [];
         this.enemySpawnTimer = 0;
@@ -81,29 +84,74 @@ class Phase4_Race {
         // Initialiser le décor
         this.initDecor();
         
-        // Charger le sprite de la moto
-        await this.loadBikeSprite();
+        // Générer le sprite sheet de la moto
+        this.generateBikeSpriteSheet();
         
         console.log('✅ Phase4_Race initialisée');
     }
     
-    async loadBikeSprite() {
-        return new Promise((resolve) => {
-            const img = new Image();
-            img.onload = () => {
-                if (img.complete && img.naturalWidth > 0) {
-                    this.bikeSprite = img;
-                    this.bikeSpriteLoaded = true;
-                    console.log('✅ Sprite moto chargé:', img.width, 'x', img.height);
-                }
-                resolve();
-            };
-            img.onerror = () => {
-                console.error('❌ Erreur chargement sprite moto');
-                resolve();
-            };
-            img.src = 'assets/images/sprites/vehicles/bikes.png';
-        });
+    generateBikeSpriteSheet() {
+        const SPRITE_SIZE = this.BIKE_SPRITE_SIZE;
+        const DIRECTIONS = 2; // gauche (0), droite (1)
+        
+        const canvas = document.createElement("canvas");
+        canvas.width = SPRITE_SIZE * DIRECTIONS;
+        canvas.height = SPRITE_SIZE;
+        
+        const ctx = canvas.getContext("2d");
+        ctx.imageSmoothingEnabled = false;
+        
+        // Couleurs
+        const BLACK = "#000000";
+        const DARK_GRAY = "#222222";
+        const GRAY = "#444444";
+        
+        // Dessine une moto vue du dessus, orientée vers le haut (roue avant en haut, roue arrière en bas)
+        // direction 0 = guidon penché à gauche, direction 1 = guidon penché à droite
+        const drawMotorcycle = (ctx, x, y, direction) => {
+            // Roue arrière (fixe, en bas)
+            ctx.fillStyle = BLACK;
+            ctx.fillRect(x + 14, y + 24, 4, 6);
+            
+            // Corps moto (fixe, vertical)
+            ctx.fillStyle = DARK_GRAY;
+            ctx.fillRect(x + 12, y + 8, 8, 16);
+            
+            // Pilote (fixe)
+            ctx.fillStyle = BLACK;
+            ctx.fillRect(x + 13, y + 12, 6, 6); // Torse
+            ctx.fillRect(x + 14, y + 10, 4, 2); // Tête
+            
+            // Roue avant (pencher selon la direction, en haut)
+            ctx.save();
+            ctx.translate(x + 16, y + 4); // Centre de la roue avant
+            // Inclinaison : gauche = penché à gauche, droite = penché à droite
+            const tiltAngle = direction === 0 ? -0.4 : 0.4; // Angle d'inclinaison
+            ctx.rotate(tiltAngle);
+            ctx.translate(-2, -3); // Retour au coin de la roue
+            ctx.fillStyle = BLACK;
+            ctx.fillRect(0, 0, 4, 6);
+            ctx.restore();
+            
+            // Guidon (pencher selon la direction, en haut)
+            ctx.save();
+            ctx.translate(x + 16, y + 7); // Centre du guidon
+            // Même inclinaison que la roue avant
+            const handlebarTilt = direction === 0 ? -0.4 : 0.4;
+            ctx.rotate(handlebarTilt);
+            ctx.translate(-6, -1); // Retour au coin du guidon
+            ctx.fillStyle = DARK_GRAY;
+            ctx.fillRect(0, 0, 12, 2);
+            ctx.restore();
+        };
+        
+        // Génération du sprite sheet
+        for (let i = 0; i < DIRECTIONS; i++) {
+            drawMotorcycle(ctx, i * SPRITE_SIZE, 0, i);
+        }
+        
+        // Stocker le sprite sheet comme image
+        this.bikeSpriteSheet = canvas;
     }
     
     initDecor() {
@@ -197,14 +245,42 @@ class Phase4_Race {
                 y >= buttonY && y <= buttonY + buttonHeight) {
                 this.buttonPressed = true;
                 
-                // Retourner à Phase0_Cinematic (début du jeu)
+                // Réinitialiser complètement le jeu depuis le début (comme un refresh)
                 setTimeout(() => {
                     this.buttonPressed = false;
-                    console.log('🔄 Retour au début (Phase0_Cinematic)');
+                    console.log('🔄 Réinitialisation complète du jeu (comme un refresh)');
+                    
+                    // Nettoyer la phase actuelle
                     this.cleanup();
+                    
+                    // Nettoyer toutes les autres phases
+                    if (this.game.phases) {
+                        this.game.phases.forEach(phase => {
+                            if (phase && phase.cleanup && phase !== this) {
+                                phase.cleanup();
+                            }
+                        });
+                    }
+                    
+                    // Réinitialiser les données du joueur
+                    this.game.playerData.hp = PLAYER_CONFIG.INITIAL_HP;
+                    this.game.playerData.maxHp = PLAYER_CONFIG.INITIAL_HP;
+                    this.game.playerData.mana = PLAYER_CONFIG.INITIAL_MANA;
+                    this.game.playerData.maxMana = PLAYER_CONFIG.INITIAL_MANA;
+                    this.game.playerData.strength = PLAYER_CONFIG.INITIAL_STRENGTH;
+                    this.game.playerData.toxicity = PLAYER_CONFIG.INITIAL_TOXICITY;
+                    this.game.playerData.endurance = PLAYER_CONFIG.INITIAL_ENDURANCE;
+                    
+                    // Arrêter la game loop actuelle
+                    this.game.stopGameLoop();
+                    
+                    // Réinitialiser complètement le jeu
                     this.game.phaseIndex = 0;
-                    this.game.currentPhase = this.game.phases[0];
-                    this.game.currentPhase.init();
+                    this.game.currentPhase = null;
+                    this.game.phases = [];
+                    
+                    // Relancer le jeu depuis le début (game.init() va recréer les phases)
+                    this.game.init();
                 }, 150);
             }
         }
@@ -239,11 +315,21 @@ class Phase4_Race {
             }
             
             // Déplacement de la moto (gauche/droite uniquement)
-            if (keys['ArrowLeft'] || keys['q'] || keys['Q']) {
+            let isMovingLeft = keys['ArrowLeft'] || keys['q'] || keys['Q'];
+            let isMovingRight = keys['ArrowRight'] || keys['d'] || keys['D'];
+            
+            if (isMovingLeft) {
                 this.bikeX -= this.bikeSpeed * deltaTime;
-            }
-            if (keys['ArrowRight'] || keys['d'] || keys['D']) {
+                // Frame 0 pour tourner à gauche
+                this.bikeCurrentFrame = 0;
+            } else if (isMovingRight) {
                 this.bikeX += this.bikeSpeed * deltaTime;
+                // Frame 1 pour tourner à droite
+                this.bikeCurrentFrame = 1;
+            } else {
+                // Rester sur la dernière frame utilisée (pas de frame "centrale")
+                // Ou on peut choisir une frame par défaut
+                // this.bikeCurrentFrame = 0; // Par exemple, frame gauche par défaut
             }
             
             // Limiter la moto sur la route (avec marges)
@@ -514,23 +600,8 @@ class Phase4_Race {
             }
         });
         
-        // Moto (vue du dessus - le sprite bikes.png contient plusieurs frames, on prend la première)
-        if (this.bikeSpriteLoaded && this.bikeSprite) {
-            // Le sprite peut contenir plusieurs frames, on utilise la première frame (64x64 selon OpenGameArt)
-            const spriteFrameSize = 64;
-            ctx.drawImage(
-                this.bikeSprite,
-                0, 0, spriteFrameSize, spriteFrameSize, // Source : première frame
-                this.bikeX - this.bikeWidth / 2,
-                this.bikeY - this.bikeHeight / 2,
-                this.bikeWidth,
-                this.bikeHeight
-            );
-        } else {
-            // Fallback : rectangle représentatif
-            ctx.fillStyle = '#0066cc';
-            ctx.fillRect(this.bikeX - this.bikeWidth / 2, this.bikeY - this.bikeHeight / 2, this.bikeWidth, this.bikeHeight);
-        }
+        // Moto (vue du dessus - générée en pixel art rétro)
+        this.renderBike(ctx);
         
         // Ligne d'arrivée (si on est proche de la fin - dernière seconde)
         if (this.raceTime >= this.raceDuration - 1) {
@@ -613,7 +684,7 @@ class Phase4_Race {
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         
-        const message = "Bravo ! Tu fais officiellement partie du gang des vrais mâles alphas. Chevaliers de l'ombre qui combattent pour conserver leur liberté, envers et contre tous !";
+        const message = "Bravo ! Tu fais officiellement partie du gang des vrais mâles alphas. Chevaliers de l'ombre qui combattent pour conserver leur liberté et répandent leur toxicité, envers et contre tous !";
         const lines = this.wrapText(ctx, message, dialogWidth - 60);
         lines.forEach((line, i) => {
             ctx.fillText(line, dialogX + 20, dialogY + 20 + (i * 25));
@@ -673,6 +744,38 @@ class Phase4_Race {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('Rejouer', this.canvas.width / 2, buttonY + buttonHeight / 2);
+    }
+    
+    renderBike(ctx) {
+        // Utiliser le sprite sheet généré
+        if (this.bikeSpriteSheet) {
+            // Désactiver l'anti-aliasing pour pixel art net
+            ctx.imageSmoothingEnabled = false;
+            
+            // Calculer la position source dans le sprite sheet
+            const sx = this.bikeCurrentFrame * this.BIKE_SPRITE_SIZE;
+            const sy = 0;
+            const sWidth = this.BIKE_SPRITE_SIZE;
+            const sHeight = this.BIKE_SPRITE_SIZE;
+            
+            // Position de destination (centrée sur bikeX, bikeY)
+            const dx = this.bikeX - this.bikeWidth / 2;
+            const dy = this.bikeY - this.bikeHeight / 2;
+            
+            // Dessiner la frame appropriée du sprite sheet (pas de rotation, guidon vers le haut)
+            ctx.drawImage(
+                this.bikeSpriteSheet,
+                sx, sy, sWidth, sHeight,  // Source : frame du sprite sheet
+                dx, dy, this.bikeWidth, this.bikeHeight  // Destination : position et taille à l'écran
+            );
+            
+            // Réactiver l'anti-aliasing pour le reste
+            ctx.imageSmoothingEnabled = true;
+        } else {
+            // Fallback : rectangle simple si le sprite sheet n'est pas encore généré
+            ctx.fillStyle = '#333333';
+            ctx.fillRect(this.bikeX - this.bikeWidth / 2, this.bikeY - this.bikeHeight / 2, this.bikeWidth, this.bikeHeight);
+        }
     }
     
     wrapText(ctx, text, maxWidth) {

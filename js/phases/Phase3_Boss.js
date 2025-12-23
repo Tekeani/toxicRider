@@ -128,6 +128,9 @@ class Phase3_Boss {
         const playerY = this.bossY - 20; // Même niveau vertical qu'Amar (ajusté pour centrer)
         this.player = new Player(playerX, playerY, this.game);
         
+        // Le chevalier doit regarder vers la gauche (vers le boss)
+        this.player.direction = 'left';
+        
         // S'assurer que le sprite du joueur est chargé
         await this.player.loadSprite();
         
